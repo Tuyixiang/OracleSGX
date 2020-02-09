@@ -47,3 +47,34 @@ void printf(const char *fmt, ...) {
   va_end(ap);
   ocall_print_string(buf);
 }
+
+extern "C" size_t recv(int socket, void *buff, size_t size, int flags) {
+  size_t recv_ret;
+  auto sgx_ret = o_recv(&recv_ret, socket, buff, size, flags);
+  return recv_ret;
+}
+
+extern "C" size_t send(int socket, const void *buff, size_t size, int flags) {
+  size_t send_ret;
+  auto sgx_ret = o_send(&send_ret, socket, buff, size, flags);
+  return send_ret;
+}
+
+extern "C" double current_time(void) {
+  double curr;
+  o_current_time(&curr);
+  return curr;
+}
+
+extern "C" int LowResTimer(void) /* low_res timer */
+{
+  int time;
+  o_low_res_time(&time);
+  return time;
+}
+
+extern "C" time_t XTIME(time_t *timer) {
+  time_t time;
+  o_time(&time, timer);
+  return time;
+}

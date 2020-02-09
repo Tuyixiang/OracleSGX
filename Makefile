@@ -93,8 +93,8 @@ else
 	Urts_Library_Name := sgx_urts
 endif
 
-App_Cpp_Files := App/App.cpp $(wildcard App/TrustedLibrary/*.cpp)
-App_Include_Paths := -IApp -I$(SGX_SDK)/include $(WolfSSL_Include_Paths)
+App_Cpp_Files := App/App.cpp $(wildcard App/TrustedLibrary/*.cpp) $(wildcard App/Oracle/*.cpp)
+App_Include_Paths := -IApp -I$(SGX_SDK)/include $(WolfSSL_Include_Paths) -I.
 
 App_C_Flags := -fPIC -Wno-attributes $(App_Include_Paths) $(WolfSSL_C_Flags)
 
@@ -138,9 +138,9 @@ else
 endif
 Crypto_Library_Name := sgx_tcrypto
 
-Enclave_Cpp_Files := Enclave/Enclave.cpp $(wildcard Enclave/TrustedLibrary/*.cpp)
+Enclave_Cpp_Files := Enclave/Enclave.cpp $(wildcard Enclave/TrustedLibrary/*.cpp) $(wildcard Enclave/Oracle/*.cpp)
 Enclave_Include_Paths := -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/libcxx -I$(SGX_SDK)/include/tlibc \
-	$(WolfSSL_Include_Paths)
+	$(WolfSSL_Include_Paths) -I.
 
 Enclave_C_Flags := -nostdinc -fvisibility=hidden -fpie -fstack-protector $(Enclave_Include_Paths) \
 	$(WolfSSL_Enclave_Flags) $(WolfSSL_C_Flags)
@@ -266,7 +266,8 @@ Enclave/%.o: Enclave/%.cpp
 
 $(Enclave_Cpp_Objects): Enclave/Enclave_t.h
 
-$(Enclave_Name): Enclave/Enclave_t.o $(Enclave_Cpp_Objects)
+$(Enclave_Name): Enclave/Enclave_t.o $(Enclave_Cpp_Files:.cpp=.o)
+	@echo $(CXX) $^ -o $@ $(Enclave_Link_Flags)
 	@$(CXX) $^ -o $@ $(Enclave_Link_Flags)
 	@echo "LINK =>  $@"
 

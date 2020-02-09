@@ -1,5 +1,12 @@
 {
   "files.associations": {
-    "vector": "cpp"
+    "vector": "cpp",
+    "enclave_u.h": "c",
+    "cstdio": "cpp",
+    "iterator": "cpp",
+    "type_traits": "cpp",
+    "exception": "cpp",
+    "cmath": "cpp",
+    "new": "cpp"
   }
 }
