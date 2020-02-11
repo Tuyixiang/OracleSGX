@@ -1,13 +1,16 @@
 #include "WolfSSL.h"
-#include "../Enclave_t.h"
 #include "CA.h"
+#include "Enclave/Enclave.h"
+#include "Enclave/Enclave_t.h"
+#include "Logging.h"
+#include "Shared/StatusCode.h"
 
 #include "sgx_trts.h"
 
 WOLFSSL_CTX *global_ctx = nullptr;
 
 // 初始化系统
-void e_init() {
+int e_init() {
   // 初始化 WolfSSL
   wolfSSL_Init();
   // 创建 ctx
@@ -19,4 +22,6 @@ void e_init() {
 
   // 保存 ctx
   global_ctx = ctx;
+  LOG("Context initialized")
+  return StatusCode::Success;
 }

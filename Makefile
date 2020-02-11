@@ -29,6 +29,11 @@
 #
 #
 
+######## Custom Settings ########
+
+CXX = g++-7
+Warning_Flags = -Wno-builtin-declaration-mismatch -Werror=switch
+
 ######## SGX SDK Settings ########
 
 SGX_SDK 	?= /home/love/sgxsdk
@@ -78,12 +83,17 @@ else
         SGX_COMMON_FLAGS += -O2
 endif
 
-SGX_COMMON_FLAGS += -Wall -Wextra -Winit-self -Wpointer-arith -Wreturn-type \
+SGX_COMMON_FLAGS += $(Warning_Flags) -Wall -Wextra -Winit-self -Wpointer-arith -Wreturn-type \
                     -Waddress -Wsequence-point -Wformat-security \
-                    -Wmissing-include-dirs -Wfloat-equal -Wundef -Wshadow \
+                    -Wmissing-include-dirs -Wfloat-equal -Wundef \
                     -Wcast-align -Wcast-qual -Wconversion -Wredundant-decls
 SGX_COMMON_CFLAGS := $(SGX_COMMON_FLAGS) -Wjump-misses-init -Wstrict-prototypes -Wunsuffixed-float-constants
-SGX_COMMON_CXXFLAGS := $(SGX_COMMON_FLAGS) -Wnon-virtual-dtor -std=c++11
+SGX_COMMON_CXXFLAGS := $(SGX_COMMON_FLAGS) -Wnon-virtual-dtor -std=c++17
+
+######## Shared Settings ########
+
+Shared_Cpp_files := $(shell find Shared/ -name "*.cpp")
+Shared_Cpp_Objects := $(Shared_Cpp_files:.cpp=.o)
 
 ######## App Settings ########
 
@@ -93,7 +103,7 @@ else
 	Urts_Library_Name := sgx_urts
 endif
 
-App_Cpp_Files := App/App.cpp $(wildcard App/TrustedLibrary/*.cpp) $(wildcard App/Oracle/*.cpp)
+App_Cpp_Files := App/App.cpp $(shell find App/*/ -name "*.cpp")
 App_Include_Paths := -IApp -I$(SGX_SDK)/include $(WolfSSL_Include_Paths) -I.
 
 App_C_Flags := -fPIC -Wno-attributes $(App_Include_Paths) $(WolfSSL_C_Flags)
@@ -113,7 +123,7 @@ endif
 App_Cpp_Flags := $(App_C_Flags)
 App_Link_Flags := -L$(SGX_LIBRARY_PATH) -l$(Urts_Library_Name) -lpthread $(WolfSSL_Link_Flags) $(OpenSSL_Link_Flags)
 
-App_Cpp_Objects := $(App_Cpp_Files:.cpp=.o)
+App_Cpp_Objects := $(App_Cpp_Files:.cpp=.o) $(Shared_Cpp_Objects)
 
 App_Name := app
 
@@ -138,7 +148,7 @@ else
 endif
 Crypto_Library_Name := sgx_tcrypto
 
-Enclave_Cpp_Files := Enclave/Enclave.cpp $(wildcard Enclave/TrustedLibrary/*.cpp) $(wildcard Enclave/Oracle/*.cpp)
+Enclave_Cpp_Files := Enclave/Enclave.cpp $(shell find Enclave/*/ -name "*.cpp")
 Enclave_Include_Paths := -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/libcxx -I$(SGX_SDK)/include/tlibc \
 	$(WolfSSL_Include_Paths) -I.
 
@@ -220,7 +230,9 @@ endif
 
 run: all
 ifneq ($(Build_Mode), HW_RELEASE)
+	@echo "\n//////////////////////\n//  BUILD COMPLETE  //\n//////////////////////\n"
 	@$(CURDIR)/$(App_Name)
+	@echo "\n//////////////////////\n//   RUN FINISHED   //\n//////////////////////\n"
 	@echo "RUN  =>  $(App_Name) [$(SGX_MODE)|$(SGX_ARCH), OK]"
 endif
 
@@ -228,52 +240,65 @@ endif
 	@rm -f .config_* $(App_Name) $(Enclave_Name) $(Signed_Enclave_Name) $(App_Cpp_Objects) App/Enclave_u.* $(Enclave_Cpp_Objects) Enclave/Enclave_t.*
 	@touch .config_$(Build_Mode)_$(SGX_ARCH)
 
+######## Shared Objects ########
+
+Shared/%.o: Shared/%.cpp $(shell find Shared/ -name "*.h")
+	@echo "CXX  <=  $<"
+	@echo "\033[2m" $(CXX) $(SGX_COMMON_CXXFLAGS) $(Enclave_Cpp_Flags) -c $< -o $@ "\033[0m"
+	@$(CXX) $(SGX_COMMON_CXXFLAGS) $(Enclave_Cpp_Flags) -c $< -o $@
+
 ######## App Objects ########
 
-App/Enclave_u.h: $(SGX_EDGER8R) Enclave/Enclave.edl
-	@cd App && $(SGX_EDGER8R) --untrusted ../Enclave/Enclave.edl --search-path ../Enclave --search-path $(SGX_SDK)/include
+App/Enclave_u.h: $(SGX_EDGER8R) $(shell find Enclave/ -name "*.edl")
 	@echo "GEN  =>  $@"
+	@cd App && $(SGX_EDGER8R) --untrusted ../Enclave/Enclave.edl --search-path ../Enclave --search-path $(SGX_SDK)/include
 
 App/Enclave_u.c: App/Enclave_u.h
 
 App/Enclave_u.o: App/Enclave_u.c
-	@$(CC) $(SGX_COMMON_CFLAGS) $(App_C_Flags) -c $< -o $@
 	@echo "CC   <=  $<"
+	@echo "\033[2m" $(CC) $(SGX_COMMON_CFLAGS) $(App_C_Flags) -c $< -o $@ "\033[0m"
+	@$(CC) $(SGX_COMMON_CFLAGS) $(App_C_Flags) -c $< -o $@
 
-App/%.o: App/%.cpp App/Enclave_u.h
-	@$(CXX) $(SGX_COMMON_CXXFLAGS) $(App_Cpp_Flags) -c $< -o $@
+App/%.o: App/%.cpp App/Enclave_u.h $(shell find Shared/ -name "*.h") $(shell find App/ -name "*.h")
 	@echo "CXX  <=  $<"
+	@echo "\033[2m" $(CXX) $(SGX_COMMON_CXXFLAGS) $(App_Cpp_Flags) -c $< -o $@ "\033[0m"
+	@$(CXX) $(SGX_COMMON_CXXFLAGS) $(App_Cpp_Flags) -c $< -o $@
 
 $(App_Name): App/Enclave_u.o $(App_Cpp_Objects)
-	@$(CXX) $^ -o $@ $(App_Link_Flags)
 	@echo "LINK =>  $@"
+	@echo "\033[2m" $(CXX) $^ -o $@ $(App_Link_Flags) "\033[0m"
+	@$(CXX) $^ -o $@ $(App_Link_Flags)
 
 ######## Enclave Objects ########
 
-Enclave/Enclave_t.h: $(SGX_EDGER8R) Enclave/Enclave.edl
-	@cd Enclave && $(SGX_EDGER8R) --trusted ../Enclave/Enclave.edl --search-path ../Enclave --search-path $(SGX_SDK)/include
+Enclave/Enclave_t.h: $(SGX_EDGER8R) $(shell find Enclave/ -name "*.edl")
 	@echo "GEN  =>  $@"
+	@cd Enclave && $(SGX_EDGER8R) --trusted ../Enclave/Enclave.edl --search-path ../Enclave --search-path $(SGX_SDK)/include
 
 Enclave/Enclave_t.c: Enclave/Enclave_t.h
 
 Enclave/Enclave_t.o: Enclave/Enclave_t.c
-	@$(CC) $(SGX_COMMON_CFLAGS) $(Enclave_C_Flags) -c $< -o $@
 	@echo "CC   <=  $<"
+	@echo "\033[2m" @$(CC) $(SGX_COMMON_CFLAGS) $(Enclave_C_Flags) -c $< -o $@ "\033[0m"
+	@$(CC) $(SGX_COMMON_CFLAGS) $(Enclave_C_Flags) -c $< -o $@
 
-Enclave/%.o: Enclave/%.cpp
-	@$(CXX) $(SGX_COMMON_CXXFLAGS) $(Enclave_Cpp_Flags) -c $< -o $@
+Enclave/%.o: Enclave/%.cpp Enclave/Enclave_t.h $(shell find Shared/ -name "*.h") $(shell find Enclave/ -name "*.h")
 	@echo "CXX  <=  $<"
+	@echo "\033[2m" @$(CXX) $(SGX_COMMON_CXXFLAGS) $(Enclave_Cpp_Flags) -c $< -o $@ "\033[0m"
+	@$(CXX) $(SGX_COMMON_CXXFLAGS) $(Enclave_Cpp_Flags) -c $< -o $@
 
 $(Enclave_Cpp_Objects): Enclave/Enclave_t.h
 
-$(Enclave_Name): Enclave/Enclave_t.o $(Enclave_Cpp_Files:.cpp=.o)
-	@echo $(CXX) $^ -o $@ $(Enclave_Link_Flags)
-	@$(CXX) $^ -o $@ $(Enclave_Link_Flags)
+$(Enclave_Name): Enclave/Enclave_t.o $(Enclave_Cpp_Files:.cpp=.o) $(Shared_Cpp_Objects)
 	@echo "LINK =>  $@"
+	@echo "\033[2m" $(CXX) $^ -o $@ $(Enclave_Link_Flags) "\033[0m"
+	@$(CXX) $^ -o $@ $(Enclave_Link_Flags)
 
 $(Signed_Enclave_Name): $(Enclave_Name)
-	@$(SGX_ENCLAVE_SIGNER) sign -key Enclave/Enclave_private.pem -enclave $(Enclave_Name) -out $@ -config $(Enclave_Config_File)
 	@echo "SIGN =>  $@"
+	@echo "\033[2m" $(SGX_ENCLAVE_SIGNER) sign -key Enclave/Enclave_private.pem -enclave $(Enclave_Name) -out $@ -config $(Enclave_Config_File) "\033[0m"
+	@$(SGX_ENCLAVE_SIGNER) sign -key Enclave/Enclave_private.pem -enclave $(Enclave_Name) -out $@ -config $(Enclave_Config_File)
 
 .PHONY: clean
 

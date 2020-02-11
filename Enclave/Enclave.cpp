@@ -39,7 +39,7 @@
  * printf:
  *   Invokes OCALL to display the enclave buffer to the terminal.
  */
-void printf(const char *fmt, ...) {
+extern "C" void printf(const char *fmt, ...) {
   char buf[BUFSIZ] = {'\0'};
   va_list ap;
   va_start(ap, fmt);
@@ -60,18 +60,15 @@ extern "C" size_t send(int socket, const void *buff, size_t size, int flags) {
   return send_ret;
 }
 
+long tv_sec;
+long tv_usec;
+
 extern "C" double current_time(void) {
-  double curr;
-  o_current_time(&curr);
-  return curr;
+  o_gettimeofday(&tv_sec, &tv_usec);
+  return (double)(1000000 * tv_sec + tv_usec) / 1000000.0;
 }
 
-extern "C" int LowResTimer(void) /* low_res timer */
-{
-  int time;
-  o_low_res_time(&time);
-  return time;
-}
+extern "C" int LowResTimer(void) { return (int)tv_sec; }
 
 extern "C" time_t XTIME(time_t *timer) {
   time_t time;

@@ -42,6 +42,7 @@ enclave {
 
     from "TrustedLibrary/Libcxx.edl" import *;
     from "sgx_tstdc.edl" import *;
+    from "Oracle/Oracle.edl" import *;
 
     /* 
      * ocall_print_string - invokes OCALL to display string buffer inside the enclave.
@@ -52,9 +53,8 @@ enclave {
         void ocall_print_string([in, string] const char *str);
         size_t o_recv(int socket, [out, size=size] void *buff, size_t size, int flags) propagate_errno;
         size_t o_send(int socket, [in, size=size] const void *buff, size_t size, int flags) propagate_errno;
-        void o_current_time([out] double* time);
-        void o_low_res_time([out] int* time);
-        long o_time([user_check]long* timer);
+        void o_gettimeofday([out] long* tv_sec, [out] long* tv_usec);
+        long o_time([out]long* timer);
     };
 
 };

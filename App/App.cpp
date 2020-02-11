@@ -133,17 +133,16 @@ int SGX_CDECL main(int argc, char *argv[]) {
   }
 
   /* Utilize trusted libraries */
-  // ecall_test(global_eid);
+  int status;
+  e_init(global_eid, &status);
+  int id;
+  auto str = "";
+  e_new_ssl(global_eid, &status, &id, str, 0);
 
   /* Destroy the enclave */
   sgx_destroy_enclave(global_eid);
 
   printf("Info: Cxx11DemoEnclave successfully returned.\n");
 
-  wolfSSL_Init();
-  wolfSSL_Cleanup();
-
-  // printf("Enter a character before exit ...\n");
-  // getchar();
   return 0;
 }
