@@ -14,6 +14,8 @@ struct StatusCode {
     Blocking,
     Uninitialized,
     NoAvailableWorker,
+    ResponseTooLarge,
+    ParserError,
     WolfsslError,
     Unknown,
   } code;
@@ -29,10 +31,29 @@ struct StatusCode {
     case NoAvailableWorker:
       return RED
           "All workers occupied. Cannot create new SSL connection." RESET;
+    case ResponseTooLarge:
+      return RED "Requested page exceeds size limit." RESET;
+    case ParserError:
+      return RED "Failed to parse HTTP response." RESET;
     case WolfsslError:
       return RED "WolfSSL error." RESET;
     case Unknown:
       return RED "WTF?" RESET;
+    }
+  }
+
+  bool is_error() const {
+    switch (code) {
+    case Success:
+    case Blocking:
+      return false;
+    case Uninitialized:
+    case NoAvailableWorker:
+    case ResponseTooLarge:
+    case ParserError:
+    case WolfsslError:
+    case Unknown:
+      return true;
     }
   }
 

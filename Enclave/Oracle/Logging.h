@@ -2,7 +2,7 @@
 #define _E_LOGGING_H_
 
 #include <string>
-inline std::string operator""s(const char *str, std::size_t len) { return str; }
+inline std::string operator""s(const char *str, std::size_t) { return str; }
 
 // 匹配后缀，符合的文件来源允许打印
 const std::string allowed_files[] = {".cpp"s, ".h"s};
