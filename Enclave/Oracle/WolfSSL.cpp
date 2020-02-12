@@ -22,6 +22,6 @@ int e_init() {
 
   // 保存 ctx
   global_ctx = ctx;
-  LOG("Context initialized")
+  LOG("Context initialized");
   return StatusCode::Success;
 }

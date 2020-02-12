@@ -39,6 +39,7 @@ struct StatusCode {
       return RED "WolfSSL error." RESET;
     case Unknown:
       return RED "WTF?" RESET;
+    default: { UNREACHABLE(); }
     }
   }
 
@@ -54,6 +55,7 @@ struct StatusCode {
     case WolfsslError:
     case Unknown:
       return true;
+    default: { UNREACHABLE(); }
     }
   }
 

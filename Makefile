@@ -33,7 +33,7 @@
 
 CC 	= gcc-7
 CXX = g++-7
-Warning_Flags = -Wno-builtin-declaration-mismatch -Werror=switch
+Warning_Flags = -Wno-builtin-declaration-mismatch -Wno-literal-suffix -Werror=switch
 
 ######## SGX SDK Settings ########
 

@@ -2,7 +2,8 @@ enclave {
 
   trusted {
     public int e_init();
-    public int e_new_ssl([out] int *p_id, [user_check] const char *request_message, int socket);
+    public int e_new_ssl([user_check] int *p_id, [user_check] const char *request_message, int socket);
+    public int e_work(int id, [user_check] char *p_response, [user_check] int *p_response_size);
   };
 
 };
