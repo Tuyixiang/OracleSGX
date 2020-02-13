@@ -1,6 +1,7 @@
 #ifndef _E_LOGGING_H_
 #define _E_LOGGING_H_
 
+#include "deps/sha256.h"
 #include <string>
 #include <tuple>
 inline std::string operator""s(const char *str, std::size_t) { return str; }
@@ -9,6 +10,10 @@ inline std::string operator""s(const char *str, std::size_t) { return str; }
 const std::string allowed_files[] = {".cpp", ".h"};
 
 const char *format(const char *fmt, ...);
+
+inline const std::string abstract(const std::string &str) {
+  return {sha256(str).data(), 16};
+}
 
 #define LOG(str, ...)                                                          \
   do {                                                                         \
@@ -27,7 +32,7 @@ const char *format(const char *fmt, ...);
 #define ERROR(str, ...)                                                        \
   do {                                                                         \
     auto print_str = format(str, ##__VA_ARGS__);                               \
-    printf("\033[37;41mERROR!\033[0m %s\n", print_str);                        \
+    printf("\033[37;41m%s:%d: %s\033[0m\n", __FILE__, __LINE__, print_str);    \
   } while (0);
 
 #define ASSERT(condition)                                                      \

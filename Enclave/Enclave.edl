@@ -51,8 +51,6 @@ enclave {
      */
     untrusted {
         void ocall_print_string([in, string] const char *str);
-        size_t o_recv(int socket, [out, size=size] void *buff, size_t size, int flags) propagate_errno;
-        size_t o_send(int socket, [in, size=size] const void *buff, size_t size, int flags) propagate_errno;
         void o_gettimeofday([out] long* tv_sec, [out] long* tv_usec);
         long o_time([out]long* timer);
     };

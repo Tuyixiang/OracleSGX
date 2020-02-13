@@ -92,6 +92,14 @@
     "slist": "cpp",
     "cfenv": "cpp",
     "cinttypes": "cpp",
-    "memory_resource": "cpp"
+    "memory_resource": "cpp",
+    "__functional_03": "cpp",
+    "variant": "cpp"
+  },
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/*/**": true,
+    "**/boost/**": true
   }
 }

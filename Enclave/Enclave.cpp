@@ -48,17 +48,9 @@ extern "C" void printf(const char *fmt, ...) {
   ocall_print_string(buf);
 }
 
-extern "C" size_t recv(int socket, void *buff, size_t size, int flags) {
-  size_t recv_ret;
-  auto sgx_ret = o_recv(&recv_ret, socket, buff, size, flags);
-  return recv_ret;
-}
+extern "C" size_t recv(int, void *, size_t, int) { abort(); }
 
-extern "C" size_t send(int socket, const void *buff, size_t size, int flags) {
-  size_t send_ret;
-  auto sgx_ret = o_send(&send_ret, socket, buff, size, flags);
-  return send_ret;
-}
+extern "C" size_t send(int, const void *, size_t, int) { abort(); }
 
 long tv_sec;
 long tv_usec;

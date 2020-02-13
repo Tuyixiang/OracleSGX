@@ -2,6 +2,7 @@
 #define _SHARED_STATUSCODE_H_
 
 #include <string>
+#include "Shared/Logging.h"
 
 #define RED "\033[31m"
 #define GREEN "\033[32m"

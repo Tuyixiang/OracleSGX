@@ -84,12 +84,12 @@ else
         SGX_COMMON_FLAGS += -O2
 endif
 
-SGX_COMMON_FLAGS += $(Warning_Flags) -Wall -Wextra -Winit-self -Wpointer-arith -Wreturn-type \
+SGX_COMMON_FLAGS += -Wall -Wextra -Winit-self -Wpointer-arith -Wreturn-type \
                     -Waddress -Wsequence-point -Wformat-security \
                     -Wmissing-include-dirs -Wfloat-equal -Wundef \
                     -Wcast-align -Wcast-qual -Wconversion -Wredundant-decls
 SGX_COMMON_CFLAGS := $(SGX_COMMON_FLAGS) -Wjump-misses-init -Wstrict-prototypes -Wunsuffixed-float-constants
-SGX_COMMON_CXXFLAGS := $(SGX_COMMON_FLAGS) -Wnon-virtual-dtor -std=c++17
+SGX_COMMON_CXXFLAGS := $(SGX_COMMON_FLAGS) -Wnon-virtual-dtor -std=c++17 $(Warning_Flags)
 
 ######## Shared Settings ########
 
@@ -107,7 +107,7 @@ else
 endif
 
 App_Cpp_Files := App/App.cpp $(shell find App/*/ -name "*.cpp")
-App_Include_Paths := -IApp -I$(SGX_SDK)/include $(WolfSSL_Include_Paths) -I.
+App_Include_Paths := -IApp -I$(SGX_SDK)/include $(WolfSSL_Include_Paths) -I. -isystem boost
 
 App_C_Flags := -fPIC -Wno-attributes $(App_Include_Paths) $(WolfSSL_C_Flags)
 

@@ -32,6 +32,9 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <time.h>
 
 #include <pwd.h>
 #include <unistd.h>
@@ -39,6 +42,7 @@
 
 #include "App.h"
 #include "Enclave_u.h"
+#include "Oracle/Oracle.h"
 #include "sgx_urts.h"
 
 /* Global EID shared by multiple threads */
@@ -120,6 +124,15 @@ void ocall_print_string(const char *str) {
   printf("%s", str);
 }
 
+void o_gettimeofday(long *tv_sec, long *tv_usec) {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  *tv_sec = tv.tv_sec;
+  *tv_usec = tv.tv_usec;
+}
+
+time_t o_time(time_t *timer) { return time(timer); }
+
 /* Application entry */
 int SGX_CDECL main(int argc, char *argv[]) {
   (void)(argc);
@@ -133,11 +146,7 @@ int SGX_CDECL main(int argc, char *argv[]) {
   }
 
   /* Utilize trusted libraries */
-  int status;
-  e_init(global_eid, &status);
-  int id;
-  auto str = "";
-  e_new_ssl(global_eid, &status, &id, str, 0);
+  test_send(global_eid);
 
   /* Destroy the enclave */
   sgx_destroy_enclave(global_eid);
