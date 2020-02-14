@@ -48,9 +48,20 @@ extern "C" void printf(const char *fmt, ...) {
   ocall_print_string(buf);
 }
 
-extern "C" size_t recv(int, void *, size_t, int) { abort(); }
+extern "C" size_t recv(int socket, void *buff, size_t size, int flags) {
+  int recv_ret;
+  char *buffer_in;
+  int size_in;
+  o_recv(&recv_ret, socket, &buffer_in, &size_in, &errno);
+  memcpy(buff, buffer_in, size_in);
+  return (size_t)recv_ret;
+}
 
-extern "C" size_t send(int, const void *, size_t, int) { abort(); }
+extern "C" size_t send(int socket, const void *buff, size_t size, int flags) {
+  int send_ret;
+  o_send(&send_ret, socket, (const char *)buff, size, &errno);
+  return (size_t)send_ret;
+}
 
 long tv_sec;
 long tv_usec;

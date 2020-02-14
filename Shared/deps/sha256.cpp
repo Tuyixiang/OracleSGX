@@ -145,13 +145,13 @@ std::string sha256(const std::string &input)
  
     SHA256 ctx = SHA256();
     ctx.init();
-    ctx.update( (unsigned char*)input.c_str(), input.length());
+    ctx.update( (const unsigned char*)input.c_str(), input.length());
     ctx.final(digest);
  
     char buf[2*SHA256::DIGEST_SIZE+1];
     buf[2*SHA256::DIGEST_SIZE] = 0;
     auto c = "0123456789abcdef";
-    for (int i = 0; i < SHA256::DIGEST_SIZE; i++) {
+    for (unsigned i = 0; i < SHA256::DIGEST_SIZE; i++) {
         buf[i * 2] = c[digest[i] / 16];
         buf[i * 2 + 1] = c[digest[i] % 16];
     }

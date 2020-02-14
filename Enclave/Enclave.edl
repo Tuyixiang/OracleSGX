@@ -52,7 +52,9 @@ enclave {
     untrusted {
         void ocall_print_string([in, string] const char *str);
         void o_gettimeofday([out] long* tv_sec, [out] long* tv_usec);
-        long o_time([out]long* timer);
+        long o_time([out] long* timer);
+        int o_recv(int socket, [out] char **buffer, [out] int *size, [out] int *p_errno);
+        int o_send(int socket, [user_check] const char *buffer, int size, [out] int *p_errno);
     };
 
 };

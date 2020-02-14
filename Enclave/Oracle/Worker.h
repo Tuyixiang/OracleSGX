@@ -3,14 +3,14 @@
 
 #include "Enclave/Enclave.h"
 #include "Enclave/Enclave_t.h"
-#include "Shared/Logging.h"
 #include "Shared/Config.h"
+#include "Shared/Logging.h"
 #include "Shared/StatusCode.h"
 #include "Shared/deps/http_parser.h"
 #include "WolfSSL.h"
-#include <wolfssl/wolfio.h>
 #include "sgx_trts.h"
 #include <map>
+#include <wolfssl/wolfio.h>
 
 class Worker {
 public:
@@ -38,16 +38,8 @@ protected:
   // 当 http_parser 调用完成回调时，设置为 true，停止读取
   bool response_complete = false;
 
-  // 发送情况, 由 Untrusted 中的 IO 操作写入, WolfSSL IO 操作时读取
-  int send_status = WOLFSSL_CBIO_ERR_WANT_WRITE;
-  // 等待发送的数据，由 WolfSSL IO 操作写入，Untrusted 需要读取
-  std::string send_buffer;
-  // 接收情况, 由 Untrusted 中的 IO 操作写入, WolfSSL IO 操作时读取
-  int recv_status = WOLFSSL_CBIO_ERR_WANT_READ;
-  std::string recv_buffer;
-
   // 给定 WolfSSL 对于某一操作的返回值，
-  // 返回 StatusCode::Success, StatusCode::WolfsslError 或 StatusCode::Blocking
+  // 返回 StatusCode::Success, StatusCode::LibraryError 或 StatusCode::Blocking
   StatusCode parse_wolfssl_status(int ret) const;
 
   // 发起握手连接，非阻塞，需要重复调用直到返回 StatusCode::Success
@@ -68,7 +60,6 @@ protected:
 
 public:
   Worker(const std::string &request_message, int socket);
-
   Worker(std::string &&request_message, int socket);
 
   // 禁止 copy 和 move

@@ -3,6 +3,8 @@
 #include "Shared/Config.h"
 #include "Shared/StatusCode.h"
 #include <boost/asio.hpp>
+#include <boost/bind.hpp>
+#include <errno.h>
 #include <iostream>
 #include <memory>
 
@@ -12,7 +14,9 @@ struct Response {
   char *p;
   int size;
 
-  Response() : p(new char[MAX_RESPONSE_SIZE]), size(0) {}
+  static const int capacity = MAX_RESPONSE_SIZE;
+
+  Response() : p(new char[capacity]), size(0) {}
   Response(Response &&other) : p(other.p), size(other.size) {
     other.p = nullptr;
     other.size = 0;
@@ -45,6 +49,8 @@ const std::string request =
     "apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9\n"
     "Accept-Encoding: gzip, deflate\n";
 
+std::map<int, ip::tcp::socket> sockets;
+
 void test_send(sgx_enclave_id_t eid) {
   int status;
   e_init(eid, &status);
@@ -54,14 +60,78 @@ void test_send(sgx_enclave_id_t eid) {
   auto resolver = ip::tcp::resolver(ctx);
   auto query = ip::tcp::resolver::query("www.baidu.com", "https");
   auto endpoints = resolver.resolve(query);
-  auto socket = ip::tcp::socket(ctx);
+  sockets.emplace(0, ctx);
+  auto &socket = sockets.at(0);
   connect(socket, endpoints);
-  for (auto it = endpoints; it != ip::tcp::resolver::iterator(); it++) {
-    std::cout << it->endpoint() << std::endl;
-  }
-
+  socket.non_blocking(true);
   e_new_ssl(eid, &status, &ssl_id, request.data(), (int)request.size(), 0);
-
   Response response;
   e_work(eid, &status, ssl_id, response.p, &response.size);
+}
+
+// 需要符合 Linux socket IO 的接口，按照标准设置 errno
+int o_recv(int socket_id, char **p_buffer, int *p_size, int *p_errno) {
+  static char buffer[SOCKET_READ_SIZE];
+  // 找到对应的 socket
+  auto iter = sockets.find(socket_id);
+  if (iter == sockets.cend()) {
+    ERROR("No socket with id %d", socket_id);
+    *p_errno = ENOTSOCK;
+    return -1;
+  }
+  auto &socket = iter->second;
+  boost::system::error_code error;
+  // 调用非阻塞 IO
+  auto recv_size =
+      socket.receive(mutable_buffer(buffer, SOCKET_READ_SIZE), 0, error);
+  if (!error) {
+    // 成功读取数据，则返回数据
+    LOG("o_recv() get %lu bytes (%s)", recv_size,
+        abstract({buffer, recv_size}).c_str());
+    *p_buffer = buffer;
+    *p_size = (int)recv_size;
+    return recv_size;
+  } else if (error == error::would_block) {
+    // 数据等待中
+    LOG("o_recv() blocking");
+    *p_errno = EWOULDBLOCK;
+    return -1;
+  } else {
+    // 出现错误
+    ERROR("o_recv() failed with message: %s", error.message());
+    *p_errno = EBADF;
+    return -1;
+  }
+  UNREACHABLE();
+}
+
+int o_send(int socket_id, const char *buffer, int size, int *p_errno) {
+  // 找到对应的 socket
+  auto iter = sockets.find(socket_id);
+  if (iter == sockets.cend()) {
+    ERROR("No socket with id %d", socket_id);
+    *p_errno = ENOTSOCK;
+    return -1;
+  }
+  auto &socket = iter->second;
+  boost::system::error_code error;
+  // 调用非阻塞 IO
+  auto send_size = socket.send(const_buffer(buffer, size), 0, error);
+  if (!error) {
+    // 发送成功
+    LOG("o_send() send %lu bytes (%s)", send_size,
+        abstract({buffer, send_size}).c_str());
+    return send_size;
+  } else if (error == error::would_block) {
+    // 数据等待中
+    LOG("o_send() blocking");
+    *p_errno = EWOULDBLOCK;
+    return -1;
+  } else {
+    // 出现错误
+    ERROR("o_send() failed with message: %s", error.message());
+    *p_errno = EBADF;
+    return -1;
+  }
+  UNREACHABLE();
 }

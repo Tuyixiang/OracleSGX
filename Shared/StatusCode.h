@@ -1,8 +1,8 @@
 #ifndef _SHARED_STATUSCODE_H_
 #define _SHARED_STATUSCODE_H_
 
-#include <string>
 #include "Shared/Logging.h"
+#include <string>
 
 #define RED "\033[31m"
 #define GREEN "\033[32m"
@@ -17,7 +17,7 @@ struct StatusCode {
     NoAvailableWorker,
     ResponseTooLarge,
     ParserError,
-    WolfsslError,
+    LibraryError,
     Unknown,
   } code;
 
@@ -36,8 +36,8 @@ struct StatusCode {
       return RED "Requested page exceeds size limit." RESET;
     case ParserError:
       return RED "Failed to parse HTTP response." RESET;
-    case WolfsslError:
-      return RED "WolfSSL error." RESET;
+    case LibraryError:
+      return RED "3rd-party library error." RESET;
     case Unknown:
       return RED "WTF?" RESET;
     default: { UNREACHABLE(); }
@@ -53,7 +53,7 @@ struct StatusCode {
     case NoAvailableWorker:
     case ResponseTooLarge:
     case ParserError:
-    case WolfsslError:
+    case LibraryError:
     case Unknown:
       return true;
     default: { UNREACHABLE(); }
