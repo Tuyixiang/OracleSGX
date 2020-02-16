@@ -79,7 +79,7 @@ endif
 endif
 
 ifeq ($(SGX_DEBUG), 1)
-        SGX_COMMON_FLAGS += -O0 -g
+        SGX_COMMON_FLAGS += -O2 -g
 else
         SGX_COMMON_FLAGS += -O2
 endif
@@ -102,9 +102,9 @@ Shared_Headers					:= $(shell find Shared/ -name "*.h") $(shell find Shared/ -na
 ######## App Settings ########
 
 ifneq ($(SGX_MODE), HW)
-	Urts_Library_Name := sgx_urts_sim
+	App_Link_Libraries 	:= -lsgx_urts_sim -lsgx_uae_service_sim
 else
-	Urts_Library_Name := sgx_urts
+	App_Link_Libraries  := -lsgx_urts -lsgx_uae_service
 endif
 
 App_C_Files 			:= $(shell find App/*/ -name "*.c")
@@ -127,7 +127,7 @@ else
 endif
 
 App_Cpp_Flags := $(App_C_Flags)
-App_Link_Flags := -L$(SGX_LIBRARY_PATH) -l$(Urts_Library_Name) -lpthread $(WolfSSL_Link_Flags) $(OpenSSL_Link_Flags)
+App_Link_Flags := -L$(SGX_LIBRARY_PATH) $(App_Link_Libraries) -lpthread $(WolfSSL_Link_Flags) $(OpenSSL_Link_Flags)
 
 App_Objects := $(App_C_Files:.c=.o) $(App_Cpp_Files:.cpp=.o)
 

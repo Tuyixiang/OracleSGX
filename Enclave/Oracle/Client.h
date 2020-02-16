@@ -1,11 +1,13 @@
 #ifndef _E_CLIENT_H_
 #define _E_CLIENT_H_
 
+#include "Enclave/deps/cJSON.h"
 #include "Shared/Config.h"
 #include "Shared/Logging.h"
 #include "Shared/StatusCode.h"
 #include "Shared/deps/http_parser.h"
 #include "WolfSSL.h"
+#include "sgx_utils.h"
 
 class Client {
  public:
@@ -25,14 +27,15 @@ class Client {
   // Session
   WOLFSSL *const ssl;
   // 需要发送的消息
-  const std::string request_message;
+  const std::string request;
   // 已经写完的长度
   int written_size = 0;
   // 解析回复
   http_parser parser;
   http_parser_settings parser_settings;
-  // 回复
+  // 回复，在生成 report 时会替换成一个表示全部信息的 json
   std::string response;
+  sgx_report_t report;
   // 当 http_parser 调用完成回调时，设置为 true，停止读取
   bool response_complete = false;
 
@@ -60,8 +63,8 @@ class Client {
   std::string wrap() const;
 
  public:
-  Client(const std::string &request_message, int id);
-  Client(std::string &&request_message, int id);
+  Client(const std::string &request, int id);
+  Client(std::string &&request, int id);
 
   // 禁止 copy 和 move
   Client(const Client &) = delete;
@@ -73,7 +76,8 @@ class Client {
   // 仅当全部流程处理完时返回 StatusCode::Success，否则返回 StatusCode::Blocking
   // 或错误代码
   StatusCode work();
-  const std::string get_response() const;
+  const std::string &get_response() const { return response; }
+  const sgx_report_t &get_report() const { return report; }
 
   // 释放 ssl 对象
   ~Client();

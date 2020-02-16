@@ -2,19 +2,21 @@
 #include "App/Enclave_u.h"
 #include "Shared/Config.h"
 #include "Shared/StatusCode.h"
+#include <chrono>
 
 using namespace boost::asio;
+using namespace std::chrono;
 
 const std::string request =
     "GET / HTTP/1.1\n"
     "Host: www.baidu.com\n"
-    "Upgrade-Insecure-Requests: 1\n"
-    "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_2) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.100 "
-    "Safari/537.36\n"
-    "Accept: "
-    "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/"
-    "apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9\n"
+    // "Upgrade-Insecure-Requests: 1\n"
+    // "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_2) "
+    // "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.100 "
+    // "Safari/537.36\n"
+    // "Accept: "
+    // "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/"
+    // "apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9\n"
     "Accept-Encoding: identity\n\n";
 
 void test() { Oracle::global().test_run("www.baidu.com", request); }
@@ -36,7 +38,8 @@ int Oracle::get_random_id() {
 }
 
 // 从 map 中和 Enclave 中移除一个任务
-std::map<int, Executor>::iterator Oracle::remove_job(const std::map<int, Executor>::iterator &it) {
+std::map<int, Executor>::iterator Oracle::remove_job(
+    const std::map<int, Executor>::iterator &it) {
   if (it == executors.cend()) {
     return it;
   }
@@ -59,6 +62,7 @@ void Oracle::work() {
     try {
       if (it->second.work()) {
         // 该任务完成，将其释放
+        printf("%lu\n", executors.size());
         LOG("Executor completed, freeing executor %d", it->first);
         it = executors.erase(it);
       } else {
@@ -75,10 +79,15 @@ void Oracle::work() {
 }
 
 void Oracle::test_run(const std::string &address, const std::string &request) {
-  new_job(address, request);
+  for (int i = 0; i < 128; i += 1) {
+    new_job(address, request);
+  }
   while (!executors.empty()) {
     work();
+    if (executors.size() < 128) {
+      new_job(address, request);
+    }
     ctx.poll();
-    usleep(1000);
+    //usleep(1000);
   }
 }

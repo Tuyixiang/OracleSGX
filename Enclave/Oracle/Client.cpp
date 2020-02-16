@@ -1,9 +1,13 @@
 // 向目标地址请求网页
 #include "Client.h"
+#include "WolfSSL.h"
+#include <wolfssl/wolfcrypt/sha512.h>
 #include <wolfssl/wolfio.h>
 #include <map>
 #include "Enclave/Enclave_t.h"
+#include "Enclave/deps/cJSON.h"
 #include "sgx_trts.h"
+#include "sgx_uae_service.h"
 
 // 给定 WolfSSL 对于某一操作的返回值，
 // 返回 StatusCode::Success, StatusCode::LibraryError 或 StatusCode::Blocking
@@ -32,8 +36,8 @@ StatusCode Client::connect() const {
 
 // 发送内容，非阻塞，需要重复调用直到返回 StatusCode::Success
 StatusCode Client::write() {
-  auto request_size = static_cast<int>(request_message.size());
-  auto ret = wolfSSL_write(ssl, request_message.c_str() + written_size,
+  auto request_size = static_cast<int>(request.size());
+  auto ret = wolfSSL_write(ssl, request.c_str() + written_size,
                            request_size - written_size);
   if (ret > 0) {
     // 更新已发送长度
@@ -100,18 +104,26 @@ void Client::init_parser() {
 }
 
 // 打包一个用于生成 quote 的数据，包含所有必要信息
-std::string Client::wrap() const {}
+std::string Client::wrap() const {
+  auto obj = cJSON_CreateObject();
+  // todo: time
+  cJSON_AddStringToObject(obj, "request", request.c_str());
+  cJSON_AddStringToObject(obj, "response", response.c_str());
+  auto json_dump = cJSON_Print(obj);
+  std::string str = json_dump;
+  cJSON_free(json_dump);
+  cJSON_Delete(obj);
+  return str;
+}
 
-Client::Client(const std::string &request_message, int id)
-    : id(id), ssl(wolfSSL_new(global_ctx)), request_message(request_message) {
+Client::Client(const std::string &request, int id)
+    : id(id), ssl(wolfSSL_new(global_ctx)), request(request) {
   wolfSSL_set_fd(ssl, id);
   init_parser();
 }
 
-Client::Client(std::string &&request_message, int id)
-    : id(id),
-      ssl(wolfSSL_new(global_ctx)),
-      request_message(std::move(request_message)) {
+Client::Client(std::string &&request, int id)
+    : id(id), ssl(wolfSSL_new(global_ctx)), request(std::move(request)) {
   wolfSSL_set_fd(ssl, id);
   init_parser();
 }
@@ -154,7 +166,7 @@ StatusCode Client::work() {
             continue;
           }
           case StatusCode::Blocking: {
-            LOG("%d/%lu bytes written", written_size, request_message.size());
+            LOG("%d/%lu bytes written", written_size, request.size());
             return StatusCode::Blocking;
           }
           case StatusCode::LibraryError: {
@@ -171,8 +183,8 @@ StatusCode Client::work() {
           case StatusCode::Success: {
             // 响应接收完成
             LOG(GREEN "Response received" RESET);
-            state = Complete;
-            return StatusCode::Success;
+            state = Quoting;
+            continue;
           }
           case StatusCode::Blocking: {
             LOG("%lu bytes received", response.size());
@@ -189,6 +201,24 @@ StatusCode Client::work() {
           default: { UNREACHABLE(); }
         }
       }
+      case Quoting: {
+        // 获取需要 hash 的全部信息
+        LOG("Getting JSON dump");
+        response = wrap();
+        // hash
+        LOG("Hashing");
+        Sha512 sha512;
+        unsigned char sha_sum[64];
+        static_assert(sizeof(sgx_report_data_t) == 64);
+        wc_InitSha512(&sha512);
+        wc_Sha512Update(&sha512, (unsigned char *)response.data(), response.size());
+        wc_Sha512Final(&sha512, sha_sum);
+        // 生成 report
+        LOG("Creating Report");
+        sgx_create_report(&target_info, (sgx_report_data_t *)sha_sum, &report);
+        state = Complete;
+        return StatusCode::Success;
+      }
       case Complete: {
         UNREACHABLE();
       }
@@ -196,8 +226,6 @@ StatusCode Client::work() {
     }
   }
 }
-
-const std::string Client::get_response() const { return response; }
 
 // 释放 ssl 对象
 Client::~Client() {

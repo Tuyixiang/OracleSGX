@@ -8,6 +8,7 @@
 #include "App/Enclave_u.h"
 #include "Shared/Config.h"
 #include "Shared/StatusCode.h"
+#include "Shared/EnclaveResult.h"
 
 using namespace boost::asio;
 
@@ -27,10 +28,6 @@ class Executor {
   } state = Resolve;
   // 如果异步操作出现错误，回调中设置 code，work() 时返回
   StatusCode error_code;
-
-  // 调用 o_recv 或 o_send 出现阻塞时置 true，然后通过 async_wait 置 false
-  // 遍历所有 Executor 时会略过正在阻塞的
-  std::atomic<bool> blocking;
   // 所连接的网址
   const std::string address;
   // 在 map<int, Executor> 中的 key，也是 Enclave 的 o_recv 和 o_send 查找的标识
@@ -47,12 +44,17 @@ class Executor {
   io_context& ctx;
   // o_recv 和 o_send 需要通过 Executor 来找到对应的 socket
   ip::tcp::socket socket;
+  // 调用 o_recv 或 o_send 出现阻塞时置 true，然后通过 async_wait 置 false
+  // 遍历所有 Executor 时会略过正在阻塞的
+  std::atomic<bool> blocking = false;
   // Enclave 返回结果
-  char response[MAX_RESPONSE_SIZE];
-  int response_size;
+  static EnclaveResult enclave_result;
 
   Executor(io_context& ctx, int id, std::string address,
            const std::string& request);
+
+  // 异步回调发现错误，调用此函数置错误标记，下次 work 时返回错误
+  void async_error();
 
   // 执行工作，返回是否完成，错误则抛出
   bool work();

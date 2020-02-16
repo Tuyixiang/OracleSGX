@@ -44,6 +44,7 @@
 #include "Enclave_u.h"
 #include "Oracle/Oracle.h"
 #include "sgx_urts.h"
+#include "sgx_uae_service.h"
 
 /* Global EID shared by multiple threads */
 sgx_enclave_id_t global_eid = 0;
@@ -146,8 +147,11 @@ int SGX_CDECL main(int argc, char *argv[]) {
   }
 
   /* Utilize trusted libraries */
+  sgx_target_info_t target_info;
+  sgx_epid_group_id_t epid;
+  sgx_init_quote(&target_info, &epid);
   int status;
-  e_init(global_eid, &status);
+  e_init(global_eid, &status, &target_info);
   test();
 
   /* Destroy the enclave */

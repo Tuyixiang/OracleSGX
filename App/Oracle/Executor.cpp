@@ -1,6 +1,9 @@
 #include "Executor.h"
+#include "App/deps/base64.h"
 
 using namespace boost::asio;
+
+EnclaveResult Executor::enclave_result;
 
 // 在 Enclave 中创建对应的对象
 void Executor::init_enclave_ssl(const std::string& request, int id) {
@@ -19,6 +22,11 @@ Executor::Executor(io_context& ctx, int id, std::string address,
   init_enclave_ssl(request, id);
   // 设置 non_blocking 需要在 socket 连接后进行，因此在回调中进行
   // socket.non_blocking(true);
+}
+
+void Executor::async_error() {
+  state = Error;
+  error_code = StatusCode::LibraryError;
 }
 
 // 执行工作，返回是否完成，错误则抛出
@@ -40,8 +48,7 @@ bool Executor::work() {
                                    // 解析错误
                                    LOG("Executor %d failed to resolve: %s", id,
                                        error.message().c_str());
-                                   state = Error;
-                                   error_code = StatusCode::LibraryError;
+                                   async_error();
                                  } else {
                                    // 解析完成后，进行连接
                                    LOG("Executor %d resolved", id);
@@ -63,8 +70,7 @@ bool Executor::work() {
             // 连接失败
             LOG("Executor %d failed to connect: %s", id,
                 error.message().c_str());
-            state = Error;
-            error_code = StatusCode::LibraryError;
+            async_error();
           } else {
             // 连接成功
             LOG("Executor %d connected", id);
@@ -81,7 +87,7 @@ bool Executor::work() {
         // 由 Enclave 进行处理
         LOG("Executor %d processing", id);
         int status;
-        e_work(global_eid, &status, id, response, &response_size);
+        e_work(global_eid, &status, id, &enclave_result);
         if (StatusCode(status).is_error()) {
           throw status;
         }
@@ -99,8 +105,10 @@ bool Executor::work() {
       }
       case Attest: {
         // 先跳过
-        LOG("Executor %d complete (%d bytes):\n%s", id, response_size,
-            response);
+        LOG("Executor %d complete (%d bytes)", id, enclave_result.data_size);
+        LOG("Report: %s", base64_encode((unsigned char*)&enclave_result.report,
+                                        (unsigned)sizeof(sgx_report_t))
+                              .c_str());
         return true;
       }
       case Error: {

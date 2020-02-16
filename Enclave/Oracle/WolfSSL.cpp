@@ -1,18 +1,23 @@
 #include "WolfSSL.h"
+#include <map>
 #include "CA.h"
 #include "Client.h"
 #include "Enclave/Enclave.h"
 #include "Enclave/Enclave_t.h"
+#include "Shared/EnclaveResult.h"
 #include "Shared/Logging.h"
 #include "Shared/StatusCode.h"
-#include <map>
 
 #include "sgx_trts.h"
 
 WOLFSSL_CTX *global_ctx = nullptr;
+sgx_target_info_t target_info;
 
 // 初始化系统
-int e_init() {
+int e_init(const void *p_target_info) {
+  // 记录 target_info
+  ASSERT(sgx_is_outside_enclave(p_target_info, sizeof(sgx_target_info_t)));
+  memcpy(&target_info, p_target_info, sizeof(sgx_target_info_t));
   // 初始化 WolfSSL
   // wolfSSL_Debugging_ON();
   wolfSSL_Init();
@@ -57,14 +62,17 @@ int e_new_ssl(int socket_id, const char *request_message, int request_size) {
 
 // 移除指定的 SSL 连接
 void e_remove_ssl(int id) {
-  if (workers.erase(id)){
+  if (workers.erase(id)) {
     LOG("Removed worker %d", id);
   }
 }
 
 // 根据 id 令指定的 SSL 连接进行工作
-// 如果处理完成，则将网页写入 p_response 指向的空间（至少 1MB）
-int e_work(int id, char *p_response, int *p_response_size) {
+// 如果处理完成，则将网页写入 p_result 指向的空间
+int e_work(int id, void *p_result) {
+  // 检查指针范围
+  ASSERT(sgx_is_outside_enclave(p_result, sizeof(EnclaveResult)));
+  auto &result = *(EnclaveResult *)p_result;
   // 根据 id 找到指定的 worker
   auto iter = workers.find(id);
   if (iter == workers.cend()) {
@@ -75,28 +83,31 @@ int e_work(int id, char *p_response, int *p_response_size) {
   // 执行操作
   auto status = worker.work();
   switch (status) {
-  case StatusCode::Success: {
-    // 执行完成
-    const auto &response = worker.get_response();
-    memcpy(p_response, response.data(), response.size());
-    *p_response_size = (int)response.size();
-    // 释放空间
-    LOG("Client %d finished, freeing", id);
-    workers.erase(iter);
-    return StatusCode::Success;
-  }
-  case StatusCode::Blocking: {
-    // 正在等待 IO
-    return StatusCode::Blocking;
-  }
-  default: {
-    // 出现错误
-    ASSERT(status.is_error());
-    // 释放空间
-    LOG("Client %d failed with error '%s', freeing", id, status.message());
-    workers.erase(iter);
-    return status;
-  }
+    case StatusCode::Success: {
+      // 执行完成
+      // 写入回复
+      auto &response = worker.get_response();
+      memcpy(result.data, response.data(), response.size());
+      result.data_size = (int)response.size();
+      // 写入 report
+      result.report = worker.get_report();
+      // 释放空间
+      LOG("Client %d finished, freeing", id);
+      workers.erase(iter);
+      return StatusCode::Success;
+    }
+    case StatusCode::Blocking: {
+      // 正在等待 IO
+      return StatusCode::Blocking;
+    }
+    default: {
+      // 出现错误
+      ASSERT(status.is_error());
+      // 释放空间
+      LOG("Client %d failed with error '%s', freeing", id, status.message());
+      workers.erase(iter);
+      return status;
+    }
   }
   UNREACHABLE();
 }
