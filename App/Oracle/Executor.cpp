@@ -13,9 +13,9 @@ Executor::Executor(io_context& ctx, int id, std::string address,
                    const std::string& request)
     : address(std::move(address)),
       id(id),
+      resolver(ctx),
       ctx(ctx),
-      socket(ctx),
-      resolver(ctx) {
+      socket(ctx) {
   init_enclave_ssl(request, id);
   // 设置 non_blocking 需要在 socket 连接后进行，因此在回调中进行
   // socket.non_blocking(true);

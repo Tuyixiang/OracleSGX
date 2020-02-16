@@ -145,7 +145,7 @@ std::string sha256(const std::string &input)
  
     SHA256 ctx = SHA256();
     ctx.init();
-    ctx.update( (const unsigned char*)input.c_str(), input.length());
+    ctx.update((const unsigned char *)input.c_str(), (unsigned int)input.length());
     ctx.final(digest);
  
     char buf[2*SHA256::DIGEST_SIZE+1];

@@ -50,9 +50,10 @@ extern "C" void printf(const char *fmt, ...) {
 }
 
 extern "C" size_t recv(int socket, void *buff, size_t size, int flags) {
+  (void)flags;
   int recv_ret;
   char *buffer_in;
-  o_recv(&recv_ret, socket, &buffer_in, size, &errno);
+  o_recv(&recv_ret, socket, &buffer_in, (int)size, &errno);
   if (recv_ret > 0) {
     memcpy(buff, buffer_in, recv_ret);
   }
@@ -60,8 +61,9 @@ extern "C" size_t recv(int socket, void *buff, size_t size, int flags) {
 }
 
 extern "C" size_t send(int socket, const void *buff, size_t size, int flags) {
+  (void)flags;
   int send_ret;
-  o_send(&send_ret, socket, (const char *)buff, size, &errno);
+  o_send(&send_ret, socket, (const char *)buff, (int)size, &errno);
   return (size_t)send_ret;
 }
 

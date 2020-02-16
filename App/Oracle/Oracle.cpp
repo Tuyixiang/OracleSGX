@@ -17,72 +17,67 @@ const std::string request =
     "apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9\n"
     "Accept-Encoding: identity\n\n";
 
-void test() {
-  Oracle::global().test_run("www.baidu.com", request);
+void test() { Oracle::global().test_run("www.baidu.com", request); }
+
+// 获取唯一的 id
+int Oracle::get_random_id() {
+  static std::random_device rd;
+  static std::mt19937 mt(rd());
+  // 超出数量则抛出错误
+  if (executors.size() >= MAX_WORKER) {
+    throw StatusCode::NoAvailableWorker;
+  }
+  // 获取唯一随机非负整数 id
+  int new_id;
+  do {
+    new_id = abs(static_cast<int>(mt()));
+  } while (executors.find(new_id) != executors.cend());
+  return new_id;
 }
 
-// 需要符合 Linux socket IO 的接口，按照标准设置 errno
-int o_recv(int socket_id, char **p_buffer, int size, int *p_errno) {
-  static char buffer[SOCKET_READ_SIZE];
-  // 找到对应的 socket
-  auto iter = Oracle::global().executors.find(socket_id);
-  if (iter == Oracle::global().executors.cend()) {
-    ERROR("No socket with id %d", socket_id);
-    *p_errno = ENOTSOCK;
-    return -1;
+// 从 map 中和 Enclave 中移除一个任务
+std::map<int, Executor>::iterator Oracle::remove_job(const std::map<int, Executor>::iterator &it) {
+  if (it == executors.cend()) {
+    return it;
   }
-  auto &socket = iter->second.socket;
-  // 调用非阻塞 IO
-  boost::system::error_code error;
-  auto recv_size = socket.receive(
-      mutable_buffer(buffer, std::min(SOCKET_READ_SIZE, size)), 0, error);
-  if (!error) {
-    // 成功读取数据，则返回数据
-    LOG("o_recv() get %lu bytes (%s, %d)", recv_size,
-        abstract({buffer, recv_size}).c_str(), size);
-    *p_buffer = buffer;
-    return recv_size;
-  } else if (error == error::would_block) {
-    // 数据等待中
-    LOG("o_recv() blocking");
-    *p_errno = EWOULDBLOCK;
-    return -1;
-  } else {
-    // 出现错误
-    ERROR("o_recv() failed with message: %s", error.message().c_str());
-    *p_errno = EBADF;
-    return -1;
-  }
-  UNREACHABLE();
+  // 在 Enclave 中移除
+  e_remove_ssl(global_eid, it->first);
+  // 移除并返回 iterator
+  return executors.erase(it);
 }
 
-int o_send(int socket_id, const char *buffer, int size, int *p_errno) {
-  // 找到对应的 socket
-  auto iter =  Oracle::global().executors.find(socket_id);
-  if (iter ==  Oracle::global().executors.cend()) {
-    ERROR("No socket with id %d", socket_id);
-    *p_errno = ENOTSOCK;
-    return -1;
+// 创建一个新的任务
+void Oracle::new_job(const std::string &address, const std::string &request) {
+  auto id = get_random_id();
+  executors.emplace(std::piecewise_construct, std::make_tuple(id),
+                    std::tie(ctx, id, address, request));
+}
+
+// 遍历并执行所有任务
+void Oracle::work() {
+  for (auto it = executors.begin(); it != executors.cend();) {
+    try {
+      if (it->second.work()) {
+        // 该任务完成，将其释放
+        it = executors.erase(it);
+      } else {
+        // 继续执行后续任务
+        ++it;
+      }
+    } catch (const StatusCode &status) {
+      // 出现错误，将其终止
+      ERROR("Executor %d terminated with message: %s", it->first,
+            status.message());
+      it = remove_job(it);
+    }
   }
-  auto &socket = iter->second.socket;
-  boost::system::error_code error;
-  // 调用非阻塞 IO
-  auto send_size = socket.send(const_buffer(buffer, size), 0, error);
-  if (!error) {
-    // 发送成功
-    LOG("o_send() send %lu bytes (%s, %d)", send_size,
-        abstract({buffer, send_size}).c_str(), size);
-    return send_size;
-  } else if (error == error::would_block) {
-    // 数据等待中
-    LOG("o_send() blocking");
-    *p_errno = EWOULDBLOCK;
-    return -1;
-  } else {
-    // 出现错误
-    ERROR("o_send() failed with message: %s", error.message());
-    *p_errno = EBADF;
-    return -1;
+}
+
+void Oracle::test_run(const std::string &address, const std::string &request) {
+  new_job(address, request);
+  while (!executors.empty()) {
+    work();
+    ctx.poll();
+    usleep(1000);
   }
-  UNREACHABLE();
 }
