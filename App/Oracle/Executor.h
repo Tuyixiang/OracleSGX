@@ -21,7 +21,7 @@ class Executor {
     Connect,
     // 在 Enclave 中执行操作（获取目标网页、生成 Report）
     Process,
-    // Intel SGX Attestation
+    // Intel SGX Attestation（生成 quote 并请求 IAS）
     Attest,
     // 出现错误，在回调中设置
     Error,

@@ -1,23 +1,23 @@
 #include "Oracle.h"
+#include <chrono>
 #include "App/Enclave_u.h"
 #include "Shared/Config.h"
 #include "Shared/StatusCode.h"
-#include <chrono>
 
 using namespace boost::asio;
 using namespace std::chrono;
 
 const std::string request =
-    "GET / HTTP/1.1\n"
-    "Host: www.baidu.com\n"
-    // "Upgrade-Insecure-Requests: 1\n"
+    "GET / HTTP/1.1\r\n"
+    "Host: www.baidu.com\r\n"
+    // "Upgrade-Insecure-Requests: 1\r\n"
     // "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_2) "
     // "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.100 "
-    // "Safari/537.36\n"
+    // "Safari/537.36\r\n"
     // "Accept: "
     // "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/"
-    // "apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9\n"
-    "Accept-Encoding: identity\n\n";
+    // "apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9\r\n"
+    "Accept-Encoding: identity\r\n\r\n";
 
 void test() { Oracle::global().test_run("www.baidu.com", request); }
 
@@ -79,15 +79,12 @@ void Oracle::work() {
 }
 
 void Oracle::test_run(const std::string &address, const std::string &request) {
-  for (int i = 0; i < 128; i += 1) {
+  for (int i = 0; i < 1; i += 1) {
     new_job(address, request);
   }
   while (!executors.empty()) {
     work();
-    if (executors.size() < 128) {
-      new_job(address, request);
-    }
-    ctx.poll();
-    //usleep(1000);
+    ctx.run_for(1ms);
+    ctx.restart();
   }
 }

@@ -1,5 +1,8 @@
 #include "Executor.h"
+#include <iostream>
 #include "App/deps/base64.h"
+#include "Shared/deps/http_parser.h"
+#include "sgx_uae_service.h"
 
 using namespace boost::asio;
 
@@ -39,7 +42,6 @@ bool Executor::work() {
     switch (state) {
       case Resolve: {
         // 解析域名
-        LOG("Executor %d resolving address '%s'", id, address.c_str());
         blocking = true;
         resolver.async_resolve(address, "https",
                                [&](auto& error, auto results) {
@@ -62,7 +64,6 @@ bool Executor::work() {
       }
       case Connect: {
         // 进行连接（尝试所有 endpoints）
-        LOG("Executor %d connecting", id);
         blocking = true;
         async_connect(socket, endpoints, [&](auto& error, auto) {
           blocking = false;
@@ -85,7 +86,6 @@ bool Executor::work() {
       }
       case Process: {
         // 由 Enclave 进行处理
-        LOG("Executor %d processing", id);
         int status;
         e_work(global_eid, &status, id, &enclave_result);
         if (StatusCode(status).is_error()) {
@@ -104,12 +104,84 @@ bool Executor::work() {
         UNREACHABLE();
       }
       case Attest: {
-        // 先跳过
-        LOG("Executor %d complete (%d bytes)", id, enclave_result.data_size);
-        LOG("Report: %s", base64_encode((unsigned char*)&enclave_result.report,
-                                        (unsigned)sizeof(sgx_report_t))
-                              .c_str());
-        return true;
+        static const char spid[] =
+            "\xDE\xD9\x6A\x2B\x18\x11\x28\xD8\x0F\x4F\x4F\xE9\x09\x1B\xCE\xBF";
+        static_assert(sizeof(sgx_spid_t) < sizeof(spid));
+        // todo: 更新 sigRL
+        static const unsigned char* sigrl = nullptr;
+        static const unsigned sigrl_size = 0;
+        // 获取 quote 大小
+        unsigned quote_size;
+        sgx_calc_quote_size(sigrl, sigrl_size, &quote_size);
+        // 获得 quote
+        auto quote = (sgx_quote_t*)malloc(quote_size);
+        sgx_get_quote(&enclave_result.report, SGX_LINKABLE_SIGNATURE,
+                      (sgx_spid_t*)spid, nullptr, nullptr, 0, nullptr, quote,
+                      quote_size);
+        // Base64 编码
+        auto b64_quote = base64_encode((unsigned char*)quote, quote_size);
+        free(quote);
+        // 生成使用 IAS API 的请求
+        auto request_body = "{\"isvEnclaveQuote\":\""s + b64_quote + "\"}"s;
+        auto request =
+            "POST /sgx/dev/attestation/v3/report HTTP/1.1\r\n"
+            "Content-Type: application/json\r\n"
+            "Host: api.trustedservices.intel.com\r\n"
+            "Ocp-Apim-Subscription-Key: 141e8ac09b50434ea6b35198cf635090\r\n"
+            "Content-Length: "s +
+            std::to_string(request_body.size()) + "\r\n\r\n"s + request_body + "\r\n\r\n"s;
+        // 连接 IAS 服务
+        blocking = true;
+        // 1. 解析域名
+        LOG("Resolving IAS hostname");
+        resolver.async_resolve(
+            "api.trustedservices.intel.com", "http",
+            [&, request](auto& error, auto endpoints) {
+              if (error) {
+                blocking = false;
+                ERROR("Failed to resovle IAS hostname: %s",
+                      error.message().c_str());
+                async_error();
+                return;
+              }
+              LOG("!");
+              socket.close();
+              // 2. 连接服务器
+              LOG("Connecting IAS server");
+              async_connect(socket, endpoints, [&, request](auto& error, auto) {
+                if (error) {
+                  blocking = false;
+                  ERROR("Failed to connect to IAS service: %s",
+                        error.message().c_str());
+                  async_error();
+                  return;
+                }
+                // 3. 发送 POST 数据
+                LOG("Sending IAS data");
+                auto buffer = const_buffer(request.data(), request.size());
+                LOG("Sending: %s", request.c_str());
+                async_write(socket, buffer, [&](auto& error, auto) {
+                  if (error) {
+                    blocking = false;
+                    ERROR("Failed to send request to IAS service: %s",
+                          error.message().c_str());
+                    async_error();
+                    return;
+                  }
+                  // 4. 读取直到 EOF
+                  LOG("Retrieving IAS response");
+                  auto buf = new char(1024);
+                  async_read(socket, mutable_buffer(buf, 1024), [&](auto& error, auto) {
+                    if (error and error != boost::asio::error::eof) {
+                      ERROR("Failed to retrieve IAS response: %s", error.message().c_str());
+                      return;
+                    }
+                    LOG("Result: %s", buf);
+                  });
+                });
+              });
+            });
+        return false;
       }
       case Error: {
         ASSERT(error_code.is_error());

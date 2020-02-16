@@ -144,7 +144,6 @@ StatusCode Client::work() {
             continue;
           }
           case StatusCode::Blocking: {
-            LOG("Connecting");
             return StatusCode::Blocking;
           }
           case StatusCode::LibraryError: {
@@ -166,7 +165,6 @@ StatusCode Client::work() {
             continue;
           }
           case StatusCode::Blocking: {
-            LOG("%d/%lu bytes written", written_size, request.size());
             return StatusCode::Blocking;
           }
           case StatusCode::LibraryError: {
@@ -187,7 +185,6 @@ StatusCode Client::work() {
             continue;
           }
           case StatusCode::Blocking: {
-            LOG("%lu bytes received", response.size());
             return StatusCode::Blocking;
           }
           case StatusCode::LibraryError: {
