@@ -146,7 +146,9 @@ int SGX_CDECL main(int argc, char *argv[]) {
   }
 
   /* Utilize trusted libraries */
-  test_send(global_eid);
+  int status;
+  e_init(global_eid, &status);
+  test();
 
   /* Destroy the enclave */
   sgx_destroy_enclave(global_eid);

@@ -1,9 +1,9 @@
 // 向目标地址请求网页
-#include "Worker.h"
+#include "Client.h"
 
 // 给定 WolfSSL 对于某一操作的返回值，
 // 返回 StatusCode::Success, StatusCode::LibraryError 或 StatusCode::Blocking
-StatusCode Worker::parse_wolfssl_status(int ret) const {
+StatusCode Client::parse_wolfssl_status(int ret) const {
   if (ret == SSL_SUCCESS) {
     return StatusCode::Success;
   } else {
@@ -22,12 +22,12 @@ StatusCode Worker::parse_wolfssl_status(int ret) const {
 }
 
 // 发起握手连接，非阻塞，需要重复调用直到返回 StatusCode::Success
-StatusCode Worker::connect() const {
+StatusCode Client::connect() const {
   return parse_wolfssl_status(wolfSSL_connect(ssl));
 }
 
 // 发送内容，非阻塞，需要重复调用直到返回 StatusCode::Success
-StatusCode Worker::write() {
+StatusCode Client::write() {
   auto request_size = static_cast<int>(request_message.size());
   auto ret = wolfSSL_write(ssl, request_message.c_str() + written_size,
                            request_size - written_size);
@@ -46,7 +46,7 @@ StatusCode Worker::write() {
 
 // 接收内容，非阻塞，需要重复调用直到收到足够数据
 // 重复从 socket 中进行读取，直到 socket 被阻塞
-StatusCode Worker::read() {
+StatusCode Client::read() {
   static char buffer[SOCKET_READ_SIZE];
   auto old_size = response.size();
   auto ret = wolfSSL_read(ssl, buffer, SOCKET_READ_SIZE);
@@ -80,14 +80,14 @@ StatusCode Worker::read() {
 }
 
 // 根据错误代码，打印 WolfSSL 的错误信息
-void Worker::print_wolfssl_error(int err) const {
+void Client::print_wolfssl_error(int err) const {
   static char buffer[89] = "WOLFSSL: ";
   wolfSSL_ERR_error_string((unsigned long)err, buffer + 9);
   ERROR(buffer);
 }
 
 // 初始化 http_parser，在消息结束时置 response_complete = true
-void Worker::init_parser() {
+void Client::init_parser() {
   parser_settings.on_message_complete = [&](auto) {
     response_complete = true;
     return 0;
@@ -95,13 +95,13 @@ void Worker::init_parser() {
   http_parser_init(&parser, HTTP_RESPONSE);
 }
 
-Worker::Worker(const std::string &request_message, int socket)
+Client::Client(const std::string &request_message, int socket)
     : ssl(wolfSSL_new(global_ctx)), request_message(request_message) {
   wolfSSL_set_fd(ssl, socket);
   init_parser();
 }
 
-Worker::Worker(std::string &&request_message, int socket)
+Client::Client(std::string &&request_message, int socket)
     : ssl(wolfSSL_new(global_ctx)),
       request_message(std::move(request_message)) {
   wolfSSL_set_fd(ssl, socket);
@@ -111,7 +111,7 @@ Worker::Worker(std::string &&request_message, int socket)
 // 对应 socket 准备好时调用，继续进行一步操作，当 IO 再次等待时返回
 // 仅当全部流程处理完时返回 StatusCode::Success，否则返回 StatusCode::Blocking
 // 或错误代码
-StatusCode Worker::work() {
+StatusCode Client::work() {
   while (true) {
     switch (state) {
     case Connecting: {
@@ -162,7 +162,7 @@ StatusCode Worker::work() {
       switch (read()) {
       case StatusCode::Success: {
         // 响应接收完成
-        LOG("Response received:\n%s", response.c_str());
+        LOG(GREEN "Response received" RESET);
         state = Complete;
         return StatusCode::Success;
       }
@@ -189,10 +189,10 @@ StatusCode Worker::work() {
   }
 }
 
-const std::string Worker::get_response() const { return response; }
+const std::string Client::get_response() const { return response; }
 
 // 释放 ssl 对象
-Worker::~Worker() {
+Client::~Client() {
   LOG("Free SSL object")
   wolfSSL_free(ssl);
 }

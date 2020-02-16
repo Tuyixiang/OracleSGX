@@ -34,6 +34,7 @@
 
 #include "Enclave.h"
 #include "Enclave_t.h" /* print_string */
+#include "Shared/Logging.h"
 
 /*
  * printf:
@@ -51,9 +52,10 @@ extern "C" void printf(const char *fmt, ...) {
 extern "C" size_t recv(int socket, void *buff, size_t size, int flags) {
   int recv_ret;
   char *buffer_in;
-  int size_in;
-  o_recv(&recv_ret, socket, &buffer_in, &size_in, &errno);
-  memcpy(buff, buffer_in, size_in);
+  o_recv(&recv_ret, socket, &buffer_in, size, &errno);
+  if (recv_ret > 0) {
+    memcpy(buff, buffer_in, recv_ret);
+  }
   return (size_t)recv_ret;
 }
 

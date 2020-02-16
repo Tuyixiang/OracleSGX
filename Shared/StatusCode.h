@@ -4,9 +4,9 @@
 #include "Shared/Logging.h"
 #include <string>
 
-#define RED "\033[31m"
-#define GREEN "\033[32m"
-#define YELLOW "\033[33m"
+#define RED "\033[37,41m"
+#define GREEN "\033[37,42m"
+#define YELLOW "\033[37,43m"
 #define RESET "\033[0m"
 
 struct StatusCode {
@@ -21,7 +21,7 @@ struct StatusCode {
     Unknown,
   } code;
 
-  const std::string message() {
+  const char *message() const {
     switch (code) {
     case Success:
       return GREEN "Success." RESET;
@@ -58,6 +58,10 @@ struct StatusCode {
       return true;
     default: { UNREACHABLE(); }
     }
+  }
+
+  bool is_fatal() const {
+    return code == Unknown;
   }
 
   StatusCode() : code(Unknown) {}

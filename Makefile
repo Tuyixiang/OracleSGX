@@ -107,7 +107,7 @@ else
 endif
 
 App_Cpp_Files := App/App.cpp $(shell find App/*/ -name "*.cpp")
-App_Include_Paths := -IApp -I$(SGX_SDK)/include $(WolfSSL_Include_Paths) -I. -isystem boost
+App_Include_Paths := -IApp -I$(SGX_SDK)/include $(WolfSSL_Include_Paths) -I. -Iboost_1_72_0
 
 App_C_Flags := -fPIC -Wno-attributes $(App_Include_Paths) $(WolfSSL_C_Flags)
 

@@ -1,10 +1,10 @@
 #include "WolfSSL.h"
 #include "CA.h"
+#include "Client.h"
 #include "Enclave/Enclave.h"
 #include "Enclave/Enclave_t.h"
 #include "Shared/Logging.h"
 #include "Shared/StatusCode.h"
-#include "Worker.h"
 
 #include "sgx_trts.h"
 
@@ -13,6 +13,7 @@ WOLFSSL_CTX *global_ctx = nullptr;
 // 初始化系统
 int e_init() {
   // 初始化 WolfSSL
+  // wolfSSL_Debugging_ON();
   wolfSSL_Init();
   // 创建 ctx
   auto method = wolfSSLv23_client_method();
@@ -26,12 +27,12 @@ int e_init() {
   return StatusCode::Success;
 }
 
-// Worker 连接通过 id 进行查找
-std::map<int, Worker> workers;
+// Client 连接通过 socket 进行查找
+std::map<int, Client> workers;
 
 // 创建一个新的 SSL 连接，返回连接的 id
-int e_new_ssl(int *p_id, const char *request_message, int request_size,
-              int socket) {
+// App 内需要确保 socket 是唯一的
+int e_new_ssl(int socket_id, const char *request_message, int request_size) {
   // 检验 ctx 已经初始化
   if (global_ctx == nullptr) {
     return StatusCode::Uninitialized;
@@ -40,18 +41,24 @@ int e_new_ssl(int *p_id, const char *request_message, int request_size,
   if (workers.size() >= MAX_WORKER) {
     return StatusCode::NoAvailableWorker;
   }
-  // 获取一个未使用的 id
-  int &id = *p_id;
-  do {
-    sgx_read_rand((unsigned char *)&id, sizeof(int));
-    id = abs(id);
-  } while (workers.find(id) != workers.cend());
+  // socket_id 必须是唯一的
+  if (workers.find(socket_id) != workers.cend()) {
+    ERROR("socket_id not unique");
+    return StatusCode::Unknown;
+  }
   // 创建 client
   workers.emplace(
-      std::piecewise_construct, std::make_tuple(id),
-      std::make_tuple(std::string(request_message, request_size), socket));
-  LOG("Created SSL with id %d", id);
+      std::piecewise_construct, std::make_tuple(socket_id),
+      std::make_tuple(std::string(request_message, request_size), socket_id));
+  LOG("Created SSL with id %d", socket_id);
   return StatusCode::Success;
+}
+
+// 移除指定的 SSL 连接
+void e_remove_ssl(int id) {
+  if (workers.erase(id)){
+    LOG("Removed worker %d", id);
+  }
 }
 
 // 根据 id 令指定的 SSL 连接进行工作
