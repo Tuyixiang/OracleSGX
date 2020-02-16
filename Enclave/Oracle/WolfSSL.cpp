@@ -5,6 +5,7 @@
 #include "Enclave/Enclave_t.h"
 #include "Shared/Logging.h"
 #include "Shared/StatusCode.h"
+#include <map>
 
 #include "sgx_trts.h"
 
@@ -80,7 +81,7 @@ int e_work(int id, char *p_response, int *p_response_size) {
     memcpy(p_response, response.data(), response.size());
     *p_response_size = (int)response.size();
     // 释放空间
-    LOG("Work finished, freeing worker %d", id);
+    LOG("Client %d finished, freeing", id);
     workers.erase(iter);
     return StatusCode::Success;
   }
@@ -92,7 +93,7 @@ int e_work(int id, char *p_response, int *p_response_size) {
     // 出现错误
     ASSERT(status.is_error());
     // 释放空间
-    LOG("Work failed, freeing worker %d", id);
+    LOG("Client %d failed with error '%s', freeing", id, status.message());
     workers.erase(iter);
     return status;
   }

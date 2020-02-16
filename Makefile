@@ -97,6 +97,7 @@ Shared_C_Files					:= $(shell find Shared/ -name "*.c")
 Shared_Cpp_Files 				:= $(shell find Shared/ -name "*.cpp")
 Shared_App_Objects  		:= $(Shared_C_Files:.c=_u.o) $(Shared_Cpp_Files:.cpp=_u.o)
 Shared_Enclave_Objects	:= $(Shared_C_Files:.c=_t.o) $(Shared_Cpp_Files:.cpp=_t.o)
+Shared_Headers					:= $(shell find Shared/ -name "*.h") $(shell find Shared/ -name "*.hpp")
 
 ######## App Settings ########
 
@@ -106,7 +107,9 @@ else
 	Urts_Library_Name := sgx_urts
 endif
 
-App_Cpp_Files := App/App.cpp $(shell find App/*/ -name "*.cpp")
+App_C_Files 			:= $(shell find App/*/ -name "*.c")
+App_Cpp_Files 		:= App/App.cpp $(shell find App/*/ -name "*.cpp")
+App_Headers				:= $(shell find App/*/ -name "*.h") $(shell find App/*/ -name "*.hpp")
 App_Include_Paths := -IApp -I$(SGX_SDK)/include $(WolfSSL_Include_Paths) -I.
 
 App_C_Flags := -fPIC -Wno-attributes $(App_Include_Paths) $(WolfSSL_C_Flags)
@@ -126,7 +129,7 @@ endif
 App_Cpp_Flags := $(App_C_Flags)
 App_Link_Flags := -L$(SGX_LIBRARY_PATH) -l$(Urts_Library_Name) -lpthread $(WolfSSL_Link_Flags) $(OpenSSL_Link_Flags)
 
-App_Cpp_Objects := $(App_Cpp_Files:.cpp=.o) $(Shared_Cpp_Objects)
+App_Objects := $(App_C_Files:.c=.o) $(App_Cpp_Files:.cpp=.o)
 
 App_Name := app
 
@@ -151,12 +154,14 @@ else
 endif
 Crypto_Library_Name := sgx_tcrypto
 
-Enclave_Cpp_Files := Enclave/Enclave.cpp $(shell find Enclave/*/ -name "*.cpp")
+Enclave_C_Files 			:= $(shell find Enclave/*/ -name "*.c")
+Enclave_Cpp_Files 		:= Enclave/Enclave.cpp $(shell find Enclave/*/ -name "*.cpp")
 Enclave_Include_Paths := -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/libcxx -I$(SGX_SDK)/include/tlibc \
 	$(WolfSSL_Include_Paths) -I.
+Enclave_Headers				:= $(shell find Enclave/*/ -name "*.h") $(shell find Enclave/*/ -name "*.hpp")
 
 Enclave_C_Flags := -nostdinc -fvisibility=hidden -fpie -fstack-protector $(Enclave_Include_Paths) \
-	$(WolfSSL_Enclave_Flags) $(WolfSSL_C_Flags)
+	$(WolfSSL_Enclave_Flags) $(WolfSSL_C_Flags) -DSGX_IN_ENCLAVE
 Enclave_Cpp_Flags := $(Enclave_C_Flags) -nostdinc++
 
 # Enable the security flags
@@ -179,7 +184,7 @@ Enclave_Link_Flags := $(Enclave_Security_Link_Flags) \
 	-Wl,--defsym,__ImageBase=0 \
 	-Wl,--version-script=$(Enclave_Version_Script)
 
-Enclave_Cpp_Objects := $(Enclave_Cpp_Files:.cpp=.o)
+Enclave_Objects := $(Enclave_C_Files:.c=.o) $(Enclave_Cpp_Files:.cpp=.o)
 
 Enclave_Name := enclave.so
 Signed_Enclave_Name := enclave.signed.so
@@ -240,27 +245,28 @@ ifneq ($(Build_Mode), HW_RELEASE)
 endif
 
 .config_$(Build_Mode)_$(SGX_ARCH):
-	@rm -f .config_* $(App_Name) $(Enclave_Name) $(Signed_Enclave_Name) $(App_Cpp_Objects) App/Enclave_u.* $(Enclave_Cpp_Objects) Enclave/Enclave_t.*
+	@rm -f .config_* $(App_Name) $(Enclave_Name) $(Signed_Enclave_Name) \
+		$(App_Objects) App/Enclave_u.* $(Enclave_Objects) Enclave/Enclave_t.* $(Shared_App_Objects) $(Shared_Enclave_Objects)
 	@touch .config_$(Build_Mode)_$(SGX_ARCH)
 
 ######## Shared Objects ########
 
-Shared/%_u.o: Shared/%.c $(shell find Shared/ -name "*.h")
+Shared/%_u.o: Shared/%.c $(Shared_Headers)
 	@echo "CC   <=  $<"
 	@echo "\033[2m" $(CC) $(SGX_COMMON_CFLAGS) $(App_C_Flags) -c $< -o $@ "\033[0m"
 	@$(CC) $(SGX_COMMON_CFLAGS) $(App_C_Flags) -c $< -o $@
 
-Shared/%_u.o: Shared/%.cpp $(shell find Shared/ -name "*.h")
+Shared/%_u.o: Shared/%.cpp $(Shared_Headers)
 	@echo "CXX  <=  $<"
 	@echo "\033[2m" $(CXX) $(SGX_COMMON_CXXFLAGS) $(App_Cpp_Flags) -c $< -o $@ "\033[0m"
 	@$(CXX) $(SGX_COMMON_CXXFLAGS) $(App_Cpp_Flags) -c $< -o $@
 
-Shared/%_t.o: Shared/%.c $(shell find Shared/ -name "*.h")
+Shared/%_t.o: Shared/%.c $(Shared_Headers)
 	@echo "CC   <=  $<"
 	@echo "\033[2m" $(CC) $(SGX_COMMON_CFLAGS) $(Enclave_C_Flags) -c $< -o $@ "\033[0m"
 	@$(CC) $(SGX_COMMON_CFLAGS) $(Enclave_C_Flags) -c $< -o $@
 
-Shared/%_t.o: Shared/%.cpp $(shell find Shared/ -name "*.h")
+Shared/%_t.o: Shared/%.cpp $(Shared_Headers)
 	@echo "CXX  <=  $<"
 	@echo "\033[2m" $(CXX) $(SGX_COMMON_CXXFLAGS) $(Enclave_Cpp_Flags) -c $< -o $@ "\033[0m"
 	@$(CXX) $(SGX_COMMON_CXXFLAGS) $(Enclave_Cpp_Flags) -c $< -o $@
@@ -273,17 +279,17 @@ App/Enclave_u.h: $(SGX_EDGER8R) $(shell find Enclave/ -name "*.edl")
 
 App/Enclave_u.c: App/Enclave_u.h
 
-App/Enclave_u.o: App/Enclave_u.c
+App/%.o: App/%.c App/Enclave_u.h $(Shared_Headers) $(App_Headers)
 	@echo "CC   <=  $<"
 	@echo "\033[2m" $(CC) $(SGX_COMMON_CFLAGS) $(App_C_Flags) -c $< -o $@ "\033[0m"
 	@$(CC) $(SGX_COMMON_CFLAGS) $(App_C_Flags) -c $< -o $@
 
-App/%.o: App/%.cpp App/Enclave_u.h $(shell find Shared/ -name "*.h") $(shell find App/ -name "*.h")
+App/%.o: App/%.cpp App/Enclave_u.h $(Shared_Headers) $(App_Headers)
 	@echo "CXX  <=  $<"
 	@echo "\033[2m" $(CXX) $(SGX_COMMON_CXXFLAGS) $(App_Cpp_Flags) -c $< -o $@ "\033[0m"
 	@$(CXX) $(SGX_COMMON_CXXFLAGS) $(App_Cpp_Flags) -c $< -o $@
 
-$(App_Name): App/Enclave_u.o $(App_Cpp_Objects) $(Shared_App_Objects)
+$(App_Name): App/Enclave_u.o $(App_Objects) $(Shared_App_Objects)
 	@echo "LINK =>  $@"
 	@echo "\033[2m" $(CXX) $^ -o $@ $(App_Link_Flags) "\033[0m"
 	@$(CXX) $^ -o $@ $(App_Link_Flags)
@@ -296,19 +302,19 @@ Enclave/Enclave_t.h: $(SGX_EDGER8R) $(shell find Enclave/ -name "*.edl")
 
 Enclave/Enclave_t.c: Enclave/Enclave_t.h
 
-Enclave/Enclave_t.o: Enclave/Enclave_t.c
+Enclave/%.o: Enclave/%.c Enclave/Enclave_t.h $(Shared_Headers) $(Enclave_Headers)
 	@echo "CC   <=  $<"
 	@echo "\033[2m" @$(CC) $(SGX_COMMON_CFLAGS) $(Enclave_C_Flags) -c $< -o $@ "\033[0m"
 	@$(CC) $(SGX_COMMON_CFLAGS) $(Enclave_C_Flags) -c $< -o $@
 
-Enclave/%.o: Enclave/%.cpp Enclave/Enclave_t.h $(shell find Shared/ -name "*.h") $(shell find Enclave/ -name "*.h")
+Enclave/%.o: Enclave/%.cpp Enclave/Enclave_t.h $(Shared_Headers) $(Enclave_Headers)
 	@echo "CXX  <=  $<"
 	@echo "\033[2m" @$(CXX) $(SGX_COMMON_CXXFLAGS) $(Enclave_Cpp_Flags) -c $< -o $@ "\033[0m"
 	@$(CXX) $(SGX_COMMON_CXXFLAGS) $(Enclave_Cpp_Flags) -c $< -o $@
 
-$(Enclave_Cpp_Objects): Enclave/Enclave_t.h
+$(Enclave_Objects): Enclave/Enclave_t.h
 
-$(Enclave_Name): Enclave/Enclave_t.o $(Enclave_Cpp_Objects) $(Shared_Enclave_Objects)
+$(Enclave_Name): Enclave/Enclave_t.o $(Enclave_Objects) $(Shared_Enclave_Objects)
 	@echo "LINK =>  $@"
 	@echo "\033[2m" $(CXX) $^ -o $@ $(Enclave_Link_Flags) "\033[0m"
 	@$(CXX) $^ -o $@ $(Enclave_Link_Flags)
@@ -321,4 +327,5 @@ $(Signed_Enclave_Name): $(Enclave_Name)
 .PHONY: clean
 
 clean:
-	@rm -f .config_* $(App_Name) $(Enclave_Name) $(Signed_Enclave_Name) $(App_Cpp_Objects) App/Enclave_u.* $(Enclave_Cpp_Objects) Enclave/Enclave_t.* $(Shared_App_Objects) $(Shared_Enclave_Objects)
+	@rm -f .config_* $(App_Name) $(Enclave_Name) $(Signed_Enclave_Name) \
+		$(App_Objects) App/Enclave_u.* $(Enclave_Objects) Enclave/Enclave_t.* $(Shared_App_Objects) $(Shared_Enclave_Objects)

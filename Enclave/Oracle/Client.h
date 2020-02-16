@@ -1,27 +1,25 @@
-#ifndef _E_WORKER_H_
-#define _E_WORKER_H_
+#ifndef _E_CLIENT_H_
+#define _E_CLIENT_H_
 
-#include "Enclave/Enclave.h"
-#include "Enclave/Enclave_t.h"
 #include "Shared/Config.h"
 #include "Shared/Logging.h"
 #include "Shared/StatusCode.h"
 #include "Shared/deps/http_parser.h"
 #include "WolfSSL.h"
-#include "sgx_trts.h"
-#include <map>
-#include <wolfssl/wolfio.h>
 
 class Client {
-public:
+ public:
   enum State {
     Connecting,
     Writing,
     Reading,
+    Quoting,
     Complete,
   };
 
-protected:
+ protected:
+  // 与 App 中共享的 id
+  const int id;
   // 当前状态
   State state = Connecting;
   // Session
@@ -58,9 +56,12 @@ protected:
   // 初始化 http_parser，在消息结束时置 response_complete = true
   void init_parser();
 
-public:
-  Client(const std::string &request_message, int socket);
-  Client(std::string &&request_message, int socket);
+  // 打包一个用于生成 quote 的数据，包含所有必要信息
+  std::string wrap() const;
+
+ public:
+  Client(const std::string &request_message, int id);
+  Client(std::string &&request_message, int id);
 
   // 禁止 copy 和 move
   Client(const Client &) = delete;
@@ -81,4 +82,4 @@ public:
   friend int send_callback(WOLFSSL *, char *buffer, int size, void *ctx);
 };
 
-#endif // _E_WORKER_H_
+#endif  // _E_CLIENT_H_

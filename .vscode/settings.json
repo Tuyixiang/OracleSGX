@@ -94,7 +94,9 @@
     "cinttypes": "cpp",
     "memory_resource": "cpp",
     "__functional_03": "cpp",
-    "variant": "cpp"
+    "variant": "cpp",
+    "stdio.h": "c",
+    "math.h": "c"
   },
   "files.watcherExclude": {
     "**/.git/objects/**": true,

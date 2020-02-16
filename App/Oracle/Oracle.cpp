@@ -59,6 +59,7 @@ void Oracle::work() {
     try {
       if (it->second.work()) {
         // 该任务完成，将其释放
+        LOG("Executor completed, freeing executor %d", it->first);
         it = executors.erase(it);
       } else {
         // 继续执行后续任务

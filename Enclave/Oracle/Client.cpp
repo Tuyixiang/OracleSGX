@@ -1,5 +1,9 @@
 // 向目标地址请求网页
 #include "Client.h"
+#include <wolfssl/wolfio.h>
+#include <map>
+#include "Enclave/Enclave_t.h"
+#include "sgx_trts.h"
 
 // 给定 WolfSSL 对于某一操作的返回值，
 // 返回 StatusCode::Success, StatusCode::LibraryError 或 StatusCode::Blocking
@@ -10,12 +14,12 @@ StatusCode Client::parse_wolfssl_status(int ret) const {
     // WolfSSL 应当返回等待 IO 的错误代码
     auto err = wolfSSL_get_error(ssl, ret);
     switch (err) {
-    case SSL_ERROR_WANT_READ:
-    case SSL_ERROR_WANT_WRITE:
-      return StatusCode::Blocking;
-    default:
-      print_wolfssl_error(err);
-      return StatusCode::LibraryError;
+      case SSL_ERROR_WANT_READ:
+      case SSL_ERROR_WANT_WRITE:
+        return StatusCode::Blocking;
+      default:
+        print_wolfssl_error(err);
+        return StatusCode::LibraryError;
     }
   }
   UNREACHABLE();
@@ -95,16 +99,20 @@ void Client::init_parser() {
   http_parser_init(&parser, HTTP_RESPONSE);
 }
 
-Client::Client(const std::string &request_message, int socket)
-    : ssl(wolfSSL_new(global_ctx)), request_message(request_message) {
-  wolfSSL_set_fd(ssl, socket);
+// 打包一个用于生成 quote 的数据，包含所有必要信息
+std::string Client::wrap() const {}
+
+Client::Client(const std::string &request_message, int id)
+    : id(id), ssl(wolfSSL_new(global_ctx)), request_message(request_message) {
+  wolfSSL_set_fd(ssl, id);
   init_parser();
 }
 
-Client::Client(std::string &&request_message, int socket)
-    : ssl(wolfSSL_new(global_ctx)),
+Client::Client(std::string &&request_message, int id)
+    : id(id),
+      ssl(wolfSSL_new(global_ctx)),
       request_message(std::move(request_message)) {
-  wolfSSL_set_fd(ssl, socket);
+  wolfSSL_set_fd(ssl, id);
   init_parser();
 }
 
@@ -114,77 +122,77 @@ Client::Client(std::string &&request_message, int socket)
 StatusCode Client::work() {
   while (true) {
     switch (state) {
-    case Connecting: {
-      // 连接中，检查返回状态是否为 Success
-      switch (connect()) {
-      case StatusCode::Success: {
-        // 成功后则转 Writing 继续执行
-        LOG("Connected");
-        state = Writing;
-        continue;
-      }
-      case StatusCode::Blocking: {
-        LOG("Connecting");
-        return StatusCode::Blocking;
-      }
-      case StatusCode::LibraryError: {
-        LOG("Connection failed");
-        return StatusCode::LibraryError;
-      }
-      default:
+      case Connecting: {
+        // 连接中，检查返回状态是否为 Success
+        switch (connect()) {
+          case StatusCode::Success: {
+            // 成功后则转 Writing 继续执行
+            LOG("Connected");
+            state = Writing;
+            continue;
+          }
+          case StatusCode::Blocking: {
+            LOG("Connecting");
+            return StatusCode::Blocking;
+          }
+          case StatusCode::LibraryError: {
+            LOG("Connection failed");
+            return StatusCode::LibraryError;
+          }
+          default:
+            UNREACHABLE();
+        }
         UNREACHABLE();
       }
-      UNREACHABLE();
-    }
-    case Writing: {
-      // 正在发送请求，检查返回状态是否为 Success
-      switch (write()) {
-      case StatusCode::Success: {
-        // 已经发送完成
-        LOG("Request Sent");
-        state = Reading;
-        continue;
+      case Writing: {
+        // 正在发送请求，检查返回状态是否为 Success
+        switch (write()) {
+          case StatusCode::Success: {
+            // 已经发送完成
+            LOG("Request Sent");
+            state = Reading;
+            continue;
+          }
+          case StatusCode::Blocking: {
+            LOG("%d/%lu bytes written", written_size, request_message.size());
+            return StatusCode::Blocking;
+          }
+          case StatusCode::LibraryError: {
+            LOG("Writing failed");
+            return StatusCode::LibraryError;
+          }
+          default:
+            UNREACHABLE();
+        }
       }
-      case StatusCode::Blocking: {
-        LOG("%d/%lu bytes written", written_size, request_message.size());
-        return StatusCode::Blocking;
+      case Reading: {
+        // 正在读取并处理响应，仅当读取完时返回 Success
+        switch (read()) {
+          case StatusCode::Success: {
+            // 响应接收完成
+            LOG(GREEN "Response received" RESET);
+            state = Complete;
+            return StatusCode::Success;
+          }
+          case StatusCode::Blocking: {
+            LOG("%lu bytes received", response.size());
+            return StatusCode::Blocking;
+          }
+          case StatusCode::LibraryError: {
+            LOG("Reading failed");
+            return StatusCode::LibraryError;
+          }
+          case StatusCode::ParserError: {
+            LOG("Parsing failed for message:\n%s", response.c_str());
+            return StatusCode::ParserError;
+          }
+          default: { UNREACHABLE(); }
+        }
       }
-      case StatusCode::LibraryError: {
-        LOG("Writing failed");
-        return StatusCode::LibraryError;
-      }
-      default:
+      case Complete: {
         UNREACHABLE();
       }
-    }
-    case Reading: {
-      // 正在读取并处理响应，仅当读取完时返回 Success
-      switch (read()) {
-      case StatusCode::Success: {
-        // 响应接收完成
-        LOG(GREEN "Response received" RESET);
-        state = Complete;
-        return StatusCode::Success;
-      }
-      case StatusCode::Blocking: {
-        LOG("%lu bytes received", response.size());
-        return StatusCode::Blocking;
-      }
-      case StatusCode::LibraryError: {
-        LOG("Reading failed");
-        return StatusCode::LibraryError;
-      }
-      case StatusCode::ParserError: {
-        LOG("Parsing failed for message:\n%s", response.c_str());
-        return StatusCode::ParserError;
-      }
-      default: { UNREACHABLE(); }
-      }
-    }
-    case Complete: {
-      UNREACHABLE();
-    }
-    default: { UNIMPLEMENTED(); }
+      default: { UNIMPLEMENTED(); }
     }
   }
 }
