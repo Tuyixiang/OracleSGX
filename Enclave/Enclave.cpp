@@ -31,9 +31,11 @@
 
 #include <stdarg.h>
 #include <stdio.h> /* vsnprintf */
+#include <map>
 
 #include "Enclave.h"
 #include "Enclave_t.h" /* print_string */
+#include "Shared/Config.h"
 #include "Shared/Logging.h"
 
 /*
@@ -49,15 +51,73 @@ extern "C" void printf(const char *fmt, ...) {
   ocall_print_string(buf);
 }
 
+// WolfSSL 读取 socket 会频繁调用
+// 为了减少 ocall 次数，每次 ocall 尽可能多读取数据
+struct RecvBuffer {
+  char data[SOCKET_READ_SIZE];
+  int recv_size;
+  int used_size;
+  RecvBuffer() : recv_size(0), used_size(0) {}
+  int valid_size() const { return recv_size - used_size; }
+  const char *valid_data() const { return data + used_size; }
+};
+std::map<int, RecvBuffer> buffers;
+
 extern "C" size_t recv(int socket, void *buff, size_t size, int flags) {
   (void)flags;
-  int recv_ret;
-  char *buffer_in;
-  o_recv(&recv_ret, socket, &buffer_in, (int)size, &errno);
-  if (recv_ret > 0) {
-    memcpy(buff, buffer_in, recv_ret);
+  auto it = buffers.find(socket);
+  if (it == buffers.cend()) {
+    // 没有缓存，进行 ocall
+    int recv_ret;
+    char *buffer_in;
+    o_recv(&recv_ret, socket, &buffer_in, SOCKET_READ_SIZE, &errno);
+    if (recv_ret > 0) {
+      // 成功收到数据
+      if (recv_ret > (int)size) {
+        // 收到的大小大于请求的大小
+        // 将多余部分存下来
+        RecvBuffer recv_buffer;
+        memcpy(recv_buffer.data, buffer_in + size, recv_ret - size);
+        recv_buffer.recv_size = recv_ret - size;
+        buffers.emplace(socket, std::move(recv_buffer));
+        // 返回需要的部分
+        INFO("recv() get %lu bytes (%s, %lu)", size,
+             abstract({buffer_in, size}).c_str(), size);
+        memcpy(buff, buffer_in, size);
+        return size;
+      } else {
+        // ocall 收到的大小小于等于请求的大小
+        // 返回目前收到的数据，等待再次调用
+        INFO("recv() get %d bytes (%s, %d)", recv_ret,
+             abstract({buffer_in, size}).c_str(), recv_ret);
+        memcpy(buff, buffer_in, (size_t)recv_ret);
+        return (size_t)recv_ret;
+      }
+    } else {
+      // 没有收到数据
+      return (size_t)recv_ret;
+    }
+  } else {
+    // 有已经缓存的数据
+    auto &recv_buffer = it->second;
+    if (recv_buffer.valid_size() > (int)size) {
+      // 缓存数据充足
+      INFO("recv() get %lu bytes from cached (%s, %lu)", size,
+           abstract({recv_buffer.valid_data(), size}).c_str(), size);
+      memcpy(buff, recv_buffer.valid_data(), size);
+      recv_buffer.used_size += size;
+      return size;
+    } else {
+      // 返回已缓存的数据，释放缓存，等待下一次调用
+      auto valid_size = recv_buffer.valid_size();
+      INFO("recv() get %d bytes from cached (%s, %d)", valid_size,
+           abstract({recv_buffer.valid_data(), size}).c_str(), valid_size);
+      memcpy(buff, recv_buffer.valid_data(), valid_size);
+      buffers.erase(it);
+      return valid_size;
+    }
   }
-  return (size_t)recv_ret;
+  UNREACHABLE();
 }
 
 extern "C" size_t send(int socket, const void *buff, size_t size, int flags) {
