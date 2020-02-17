@@ -18,6 +18,7 @@ struct StatusCode {
     ResponseTooLarge,
     ParserError,
     LibraryError,
+    Timeout,
     Unknown,
   } code;
 
@@ -38,6 +39,8 @@ struct StatusCode {
         return RED "Failed to parse HTTP response." RESET;
       case LibraryError:
         return RED "3rd-party library error." RESET;
+      case Timeout:
+        return RED "Timeout." RESET;
       case Unknown:
         return RED "WTF?" RESET;
       default: { UNREACHABLE(); }
@@ -54,6 +57,7 @@ struct StatusCode {
       case ResponseTooLarge:
       case ParserError:
       case LibraryError:
+      case Timeout:
       case Unknown:
         return true;
       default: { UNREACHABLE(); }
@@ -64,6 +68,7 @@ struct StatusCode {
 
   StatusCode() : code(Unknown) {}
   StatusCode(int code) : code(static_cast<Code>(code)) {}
+  StatusCode(Code code) : code(code) {}
 
   operator int() const { return static_cast<int>(code); }
 };

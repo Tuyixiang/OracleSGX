@@ -97,7 +97,8 @@
     "variant": "cpp",
     "stdio.h": "c",
     "math.h": "c",
-    "cerrno": "cpp"
+    "cerrno": "cpp",
+    "*.inc": "cpp"
   },
   "files.watcherExclude": {
     "**/.git/objects/**": true,

@@ -4,6 +4,7 @@
 #include <atomic>
 #include <boost/asio.hpp>
 #include <string>
+#include <chrono>
 #include "App/App.h"
 #include "App/Enclave_u.h"
 #include "Shared/Config.h"
@@ -11,6 +12,7 @@
 #include "Shared/StatusCode.h"
 
 using namespace boost::asio;
+using namespace std::chrono;
 
 class SSLClient;
 
@@ -39,6 +41,8 @@ class Executor {
   ip::tcp::resolver::results_type endpoints;
   // 访问 IAS 所用
   SSLClient* ssl_client = nullptr;
+  // 开始时间
+  const time_point<steady_clock> start_time;
 
   // 在 Enclave 中创建对应的对象
   static void init_enclave_ssl(const std::string& hostname,
@@ -63,6 +67,9 @@ class Executor {
 
   // 执行工作，返回是否完成，错误则抛出
   bool work();
+
+  // 关闭所有 socket，在释放前必须 close() 且 context 执行完回调
+  void close();
 
   ~Executor();
 };

@@ -9,5 +9,7 @@ const int SOCKET_READ_SIZE = 8192;
 const int MAX_RESPONSE_SIZE = 1 << 20;  // 1MB
 // 在 App 中用一个单独的（线程不应冲突）buffer 保存 Enclave 返回的数据
 const int APP_RESPONSE_BUFFER_SIZE = 1 << 23;  // 8MB
+// 单个完整任务超时时限
+#define TASK_TIMEOUT 6s
 
 #endif  // _SHARED_CONFIG_H_

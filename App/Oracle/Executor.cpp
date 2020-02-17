@@ -18,11 +18,12 @@ void Executor::init_enclave_ssl(const std::string& hostname,
   ASSERT(status == StatusCode::Success);
 }
 
-Executor::Executor(io_context& ctx, int id, const std::string &hostname,
+Executor::Executor(io_context& ctx, int id, const std::string& hostname,
                    const std::string& request)
     : hostname(hostname),
       id(id),
       resolver(ctx),
+      start_time(steady_clock::now()),
       ctx(ctx),
       socket(ctx) {
   init_enclave_ssl(hostname, request, id);
@@ -39,6 +40,10 @@ void Executor::async_error() {
 bool Executor::work() {
   if (blocking) {
     // 正在进行异步操作，尚未结束
+    if (steady_clock::now() - start_time > TASK_TIMEOUT) {
+      // 超时时，关闭连接
+      throw StatusCode(StatusCode::Timeout);
+    }
     return false;
   }
   while (true) {
@@ -92,11 +97,12 @@ bool Executor::work() {
         int status;
         e_work(global_eid, &status, id, &enclave_result);
         if (StatusCode(status).is_error()) {
-          throw status;
+          throw StatusCode(status);
         }
         if (status == StatusCode::Success) {
           // 处理完成
           LOG("Executor %d processing done", id);
+          socket.close();
           state = Attest;
           // 执行下一步
           continue;
@@ -137,18 +143,20 @@ bool Executor::work() {
             "\r\n\r\n"s;
         // 连接 IAS 服务
         blocking = true;
-        ssl_client = create_SSLClient(
-            hostname, request, ctx, [&](const std::string& response_body) {
-              blocking = false;
-              if (response_body.empty()) {
-                // 出现错误
-                async_error();
-                return;
-              }
-              LOG("Response: %s", response_body.c_str());
-              state = Finished;
-              error_code = StatusCode::Success;
-            });
+        ssl_client = create_SSLClient(id, hostname, request, ctx,
+                                      [&](const std::string& response_body) {
+                                        blocking = false;
+                                        if (response_body.empty()) {
+                                          // 出现错误
+                                          async_error();
+                                          return;
+                                        }
+                                        LOG("IAS done %d", id);
+                                        // LOG("Response: %s",
+                                        // response_body.c_str());
+                                        state = Finished;
+                                        error_code = StatusCode::Success;
+                                      });
         return false;
       }
       case Finished: {
@@ -165,6 +173,11 @@ bool Executor::work() {
 }
 
 Executor::~Executor() {
-  socket.close();
+  LOG("Removing executor %d", id);
   free_SSLClient(ssl_client);
+}
+
+void Executor::close() {
+  socket.close();
+  close_SSLClient(ssl_client);
 }

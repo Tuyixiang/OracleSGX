@@ -27,7 +27,7 @@ int Oracle::get_random_id() {
   static std::mt19937 mt(rd());
   // 超出数量则抛出错误
   if (executors.size() >= MAX_WORKER) {
-    throw StatusCode::NoAvailableWorker;
+    throw StatusCode(StatusCode::NoAvailableWorker);
   }
   // 获取唯一随机非负整数 id
   int new_id;
@@ -63,7 +63,10 @@ void Oracle::work() {
       if (it->second.work()) {
         // 该任务完成，将其释放
         LOG("Executor completed, freeing executor %d", it->first);
-        it = executors.erase(it);
+        it->second.close();
+        ctx.poll();
+        ctx.restart();
+        it = remove_job(it);
       } else {
         // 继续执行后续任务
         ++it;
@@ -72,19 +75,22 @@ void Oracle::work() {
       // 出现错误，将其终止
       ERROR("Executor %d terminated with message: %s", it->first,
             status.message());
+      it->second.close();
+      ctx.poll();
+      ctx.restart();
       it = remove_job(it);
     }
   }
 }
 
 void Oracle::test_run(const std::string &address, const std::string &request) {
-  for (int i = 0; i < 1; i += 1) {
+  for (int i = 0; i < 256; i += 1) {
     new_job(address, request);
   }
   while (!executors.empty()) {
-    // if (executors.size() < 4) {
-    //   new_job(address, request);
-    // }
+    if (executors.size() < 256) {
+      new_job(address, request);
+    }
     work();
     ctx.poll();
     ctx.restart();

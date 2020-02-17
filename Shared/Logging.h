@@ -12,7 +12,7 @@ inline std::string operator""s(const char *str, std::size_t) { return str; }
 // 匹配后缀，符合的文件来源允许打印
 const std::string allowed_files[] = {".cpp", ".h"};
 
-// #define LOG_ON
+#define LOG_ON
 // #define INFO_ON
 
 const char *format(const char *fmt, ...);
