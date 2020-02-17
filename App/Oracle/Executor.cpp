@@ -163,5 +163,6 @@ bool Executor::work() {
 }
 
 Executor::~Executor() {
+  socket.close();
   free_SSLClient(ssl_client);
 }

@@ -27,6 +27,19 @@ int o_recv(int socket_id, char **p_buffer, int size, int *p_errno) {
     // 数据等待中
     INFO("o_recv() blocking");
     *p_errno = EWOULDBLOCK;
+    executor.blocking = true;
+    socket.async_wait(ip::tcp::socket::wait_read, [&](auto &error) {
+      INFO("o_recv() block release");
+      if (error == error::operation_aborted) {
+        // 已经取消，此时 Executor 可能已经被释放
+        return;
+      }
+      executor.blocking = false;
+      if (error) {
+        ERROR("async_wait on receive failed: %s", error.message().c_str());
+        executor.async_error();
+      }
+    });
     return -1;
   } else {
     // 出现错误
@@ -59,6 +72,19 @@ int o_send(int socket_id, const char *buffer, int size, int *p_errno) {
     // 数据等待中
     INFO("o_send() blocking");
     *p_errno = EWOULDBLOCK;
+    executor.blocking = true;
+    socket.async_wait(ip::tcp::socket::wait_write, [&](auto &error) {
+      INFO("o_send() block release");
+      if (error == error::operation_aborted) {
+        // 已经取消，此时 Executor 可能已经被释放
+        return;
+      }
+      executor.blocking = false;
+      if (error) {
+        ERROR("async_wait on send failed: %s", error.message().c_str());
+        executor.async_error();
+      }
+    });
     return -1;
   } else {
     // 出现错误
