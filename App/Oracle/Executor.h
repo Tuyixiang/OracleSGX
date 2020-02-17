@@ -7,10 +7,12 @@
 #include "App/App.h"
 #include "App/Enclave_u.h"
 #include "Shared/Config.h"
-#include "Shared/StatusCode.h"
 #include "Shared/EnclaveResult.h"
+#include "Shared/StatusCode.h"
 
 using namespace boost::asio;
+
+class SSLClient;
 
 class Executor {
  protected:
@@ -35,6 +37,8 @@ class Executor {
   // 解析得到的一系列 IP 地址
   ip::tcp::resolver resolver;
   ip::tcp::resolver::results_type endpoints;
+  // 访问 IAS 所用
+  SSLClient* ssl_client = nullptr;
 
   // 在 Enclave 中创建对应的对象
   static void init_enclave_ssl(const std::string& request, int id);
@@ -58,6 +62,8 @@ class Executor {
 
   // 执行工作，返回是否完成，错误则抛出
   bool work();
+
+  ~Executor();
 };
 
 #endif  // _A_EXECUTOR_H_

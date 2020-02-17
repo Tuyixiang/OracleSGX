@@ -1,6 +1,7 @@
 #include "Executor.h"
 #include <iostream>
 #include "App/deps/base64.h"
+#include "SSLClient_port.h"
 #include "Shared/deps/http_parser.h"
 #include "sgx_uae_service.h"
 
@@ -122,6 +123,7 @@ bool Executor::work() {
         auto b64_quote = base64_encode((unsigned char*)quote, quote_size);
         free(quote);
         // 生成使用 IAS API 的请求
+        auto hostname = "api.trustedservices.intel.com"s;
         auto request_body = "{\"isvEnclaveQuote\":\""s + b64_quote + "\"}"s;
         auto request =
             "POST /sgx/dev/attestation/v3/report HTTP/1.1\r\n"
@@ -129,66 +131,37 @@ bool Executor::work() {
             "Host: api.trustedservices.intel.com\r\n"
             "Ocp-Apim-Subscription-Key: 141e8ac09b50434ea6b35198cf635090\r\n"
             "Content-Length: "s +
-            std::to_string(request_body.size()) + "\r\n\r\n"s + request_body + "\r\n\r\n"s;
+            std::to_string(request_body.size()) + "\r\n\r\n"s + request_body +
+            "\r\n\r\n"s;
         // 连接 IAS 服务
         blocking = true;
-        // 1. 解析域名
-        LOG("Resolving IAS hostname");
-        resolver.async_resolve(
-            "api.trustedservices.intel.com", "http",
-            [&, request](auto& error, auto endpoints) {
-              if (error) {
-                blocking = false;
-                ERROR("Failed to resovle IAS hostname: %s",
-                      error.message().c_str());
+        ssl_client = create_SSLClient(
+            hostname, request, ctx, [&](const std::string& response_body) {
+              blocking = false;
+              if (response_body.empty()) {
+                // 出现错误
                 async_error();
                 return;
               }
-              LOG("!");
-              socket.close();
-              // 2. 连接服务器
-              LOG("Connecting IAS server");
-              async_connect(socket, endpoints, [&, request](auto& error, auto) {
-                if (error) {
-                  blocking = false;
-                  ERROR("Failed to connect to IAS service: %s",
-                        error.message().c_str());
-                  async_error();
-                  return;
-                }
-                // 3. 发送 POST 数据
-                LOG("Sending IAS data");
-                auto buffer = const_buffer(request.data(), request.size());
-                LOG("Sending: %s", request.c_str());
-                async_write(socket, buffer, [&](auto& error, auto) {
-                  if (error) {
-                    blocking = false;
-                    ERROR("Failed to send request to IAS service: %s",
-                          error.message().c_str());
-                    async_error();
-                    return;
-                  }
-                  // 4. 读取直到 EOF
-                  LOG("Retrieving IAS response");
-                  auto buf = new char(1024);
-                  async_read(socket, mutable_buffer(buf, 1024), [&](auto& error, auto) {
-                    if (error and error != boost::asio::error::eof) {
-                      ERROR("Failed to retrieve IAS response: %s", error.message().c_str());
-                      return;
-                    }
-                    LOG("Result: %s", buf);
-                  });
-                });
-              });
+              LOG("Response: %s", response_body.c_str());
+              state = Error;
+              error_code = StatusCode::Success;
             });
         return false;
       }
       case Error: {
-        ASSERT(error_code.is_error());
-        throw error_code;
+        if (error_code.is_error()) {
+          throw error_code;
+        } else {
+          return true;
+        }
       }
       default: { UNREACHABLE(); }
     }
   }
   UNREACHABLE();
+}
+
+Executor::~Executor() {
+  free_SSLClient(ssl_client);
 }

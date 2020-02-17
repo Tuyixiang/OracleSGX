@@ -79,12 +79,15 @@ void Oracle::work() {
 }
 
 void Oracle::test_run(const std::string &address, const std::string &request) {
-  for (int i = 0; i < 1; i += 1) {
+  for (int i = 0; i < 256; i += 1) {
     new_job(address, request);
   }
   while (!executors.empty()) {
+    if (executors.size() < 256) {
+      new_job(address, request);
+    }
     work();
-    ctx.run_for(1ms);
+    ctx.poll();
     ctx.restart();
   }
 }

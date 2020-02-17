@@ -52,7 +52,7 @@ WolfSSL_C_Flags 				= -DWOLFSSL_SGX -DWOLFSSL_SHA224 -DWOLFSSL_SHA256 \
 WolfSSL_Enclave_Flags   = -DNO_WOLFSSL_DIR
 WolfSSL_Include_Paths		= -I$(WolfSSL_Root)/include
 WolfSSL_Link_Flags			= -L$(WolfSSL_Library_Path) -lm -lwolfssl
-OpenSSL_Link_Flags 			= -L/opt/openssl/1.1.1/lib -lssl -lcrypto
+OpenSSL_Link_Flags 			= -L/usr/local/lib -lssl -lcrypto
 
 ifeq ($(shell getconf LONG_BIT), 32)
 	SGX_ARCH := x86
@@ -127,7 +127,8 @@ else
 endif
 
 App_Cpp_Flags := $(App_C_Flags)
-App_Link_Flags := -L$(SGX_LIBRARY_PATH) $(App_Link_Libraries) -lpthread $(WolfSSL_Link_Flags) $(OpenSSL_Link_Flags)
+App_Link_Flags := -L$(SGX_LIBRARY_PATH) $(App_Link_Libraries) -lpthread\
+	$(WolfSSL_Link_Flags) $(OpenSSL_Link_Flags) -L/usr/local/lib -lboost_coroutine
 
 App_Objects := $(App_C_Files:.c=.o) $(App_Cpp_Files:.cpp=.o)
 
