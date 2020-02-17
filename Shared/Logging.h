@@ -12,7 +12,8 @@ inline std::string operator""s(const char *str, std::size_t) { return str; }
 // 匹配后缀，符合的文件来源允许打印
 const std::string allowed_files[] = {".cpp", ".h"};
 
-#define INFO_ON
+// #define LOG_ON
+// #define INFO_ON
 
 const char *format(const char *fmt, ...);
 
@@ -20,6 +21,7 @@ inline const std::string abstract(const std::string &str) {
   return {sha256(str).data(), 16};
 }
 
+#ifdef LOG_ON
 #define LOG(str, ...)                                                    \
   do {                                                                   \
     auto file_str = std::string(__FILE__);                               \
@@ -32,7 +34,9 @@ inline const std::string abstract(const std::string &str) {
       }                                                                  \
     }                                                                    \
   } while (0);
-
+#else
+#define LOG(str, ...)
+#endif
 #ifdef INFO_ON
 #define INFO(str, ...)                                                       \
   do {                                                                       \

@@ -61,7 +61,6 @@ void SSLClient::run() {
       http::response<http::string_body> response;
       http::async_read(stream, buffer, response, yield[error]);
       check("retrieve IAS response");
-      LOG(response.body().c_str());
       callback(response.body());
     } catch (const std::string& error_message) {
       ERROR(error_message.c_str());

@@ -29,7 +29,7 @@ Executor::Executor(io_context& ctx, int id, std::string address,
 }
 
 void Executor::async_error() {
-  state = Error;
+  state = Finished;
   error_code = StatusCode::LibraryError;
 }
 
@@ -117,7 +117,7 @@ bool Executor::work() {
         // 获得 quote
         auto quote = (sgx_quote_t*)malloc(quote_size);
         sgx_get_quote(&enclave_result.report, SGX_LINKABLE_SIGNATURE,
-                      (sgx_spid_t*)spid, nullptr, nullptr, 0, nullptr, quote,
+                      (const sgx_spid_t*)spid, nullptr, nullptr, 0, nullptr, quote,
                       quote_size);
         // Base64 编码
         auto b64_quote = base64_encode((unsigned char*)quote, quote_size);
@@ -144,12 +144,12 @@ bool Executor::work() {
                 return;
               }
               LOG("Response: %s", response_body.c_str());
-              state = Error;
+              state = Finished;
               error_code = StatusCode::Success;
             });
         return false;
       }
-      case Error: {
+      case Finished: {
         if (error_code.is_error()) {
           throw error_code;
         } else {

@@ -29,6 +29,8 @@
 
 */
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
 #include "base64.h"
 #include <iostream>
 
@@ -120,3 +122,5 @@ std::string base64_decode(std::string const& encoded_string) {
 
   return ret;
 }
+
+#pragma GCC diagnostic pop

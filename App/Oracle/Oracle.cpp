@@ -62,7 +62,6 @@ void Oracle::work() {
     try {
       if (it->second.work()) {
         // 该任务完成，将其释放
-        printf("%lu\n", executors.size());
         LOG("Executor completed, freeing executor %d", it->first);
         it = executors.erase(it);
       } else {

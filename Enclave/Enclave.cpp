@@ -78,7 +78,7 @@ extern "C" size_t recv(int socket, void *buff, size_t size, int flags) {
         // 将多余部分存下来
         RecvBuffer recv_buffer;
         memcpy(recv_buffer.data, buffer_in + size, recv_ret - size);
-        recv_buffer.recv_size = recv_ret - size;
+        recv_buffer.recv_size = recv_ret - (int)size;
         buffers.emplace(socket, std::move(recv_buffer));
         // 返回需要的部分
         INFO("recv() get %lu bytes (%s, %lu)", size,
@@ -105,7 +105,7 @@ extern "C" size_t recv(int socket, void *buff, size_t size, int flags) {
       INFO("recv() get %lu bytes from cached (%s, %lu)", size,
            abstract({recv_buffer.valid_data(), size}).c_str(), size);
       memcpy(buff, recv_buffer.valid_data(), size);
-      recv_buffer.used_size += size;
+      recv_buffer.used_size += (int)size;
       return size;
     } else {
       // 返回已缓存的数据，释放缓存，等待下一次调用

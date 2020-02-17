@@ -25,8 +25,8 @@ class Executor {
     Process,
     // Intel SGX Attestation（生成 quote 并请求 IAS）
     Attest,
-    // 出现错误，在回调中设置
-    Error,
+    // 出现错误，或执行完毕，在回调中设置，由 error_code 区分
+    Finished,
   } state = Resolve;
   // 如果异步操作出现错误，回调中设置 code，work() 时返回
   StatusCode error_code;

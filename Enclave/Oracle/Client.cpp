@@ -208,7 +208,7 @@ StatusCode Client::work() {
         unsigned char sha_sum[64];
         static_assert(sizeof(sgx_report_data_t) == 64);
         wc_InitSha512(&sha512);
-        wc_Sha512Update(&sha512, (unsigned char *)response.data(), response.size());
+        wc_Sha512Update(&sha512, (const unsigned char *)response.data(), (unsigned)response.size());
         wc_Sha512Final(&sha512, sha_sum);
         // 生成 report
         LOG("Creating Report");

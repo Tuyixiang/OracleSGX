@@ -96,7 +96,8 @@
     "__functional_03": "cpp",
     "variant": "cpp",
     "stdio.h": "c",
-    "math.h": "c"
+    "math.h": "c",
+    "cerrno": "cpp"
   },
   "files.watcherExclude": {
     "**/.git/objects/**": true,
