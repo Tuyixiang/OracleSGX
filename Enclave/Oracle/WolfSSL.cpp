@@ -38,7 +38,10 @@ std::map<int, Client> workers;
 
 // 创建一个新的 SSL 连接，返回连接的 id
 // App 内需要确保 socket 是唯一的
-int e_new_ssl(int socket_id, const char *request_message, int request_size) {
+int e_new_ssl(int socket_id, const char *hostname, size_t hostname_size,
+              const char *request, size_t request_size) {
+  ASSERT(sgx_is_outside_enclave(hostname, hostname_size));
+  ASSERT(sgx_is_outside_enclave(request, request_size));
   // 检验 ctx 已经初始化
   if (global_ctx == nullptr) {
     return StatusCode::Uninitialized;
@@ -55,7 +58,8 @@ int e_new_ssl(int socket_id, const char *request_message, int request_size) {
   // 创建 client
   workers.emplace(
       std::piecewise_construct, std::make_tuple(socket_id),
-      std::make_tuple(std::string(request_message, request_size), socket_id));
+      std::make_tuple(std::string(hostname, hostname_size),
+                      std::string(request, request_size), socket_id));
   LOG("Created SSL with id %d", socket_id);
   return StatusCode::Success;
 }

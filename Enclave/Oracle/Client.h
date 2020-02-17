@@ -63,8 +63,7 @@ class Client {
   std::string wrap() const;
 
  public:
-  Client(const std::string &request, int id);
-  Client(std::string &&request, int id);
+  Client(const std::string &hostname, std::string &&request, int id);
 
   // 禁止 copy 和 move
   Client(const Client &) = delete;

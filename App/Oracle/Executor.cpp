@@ -10,20 +10,22 @@ using namespace boost::asio;
 EnclaveResult Executor::enclave_result;
 
 // 在 Enclave 中创建对应的对象
-void Executor::init_enclave_ssl(const std::string& request, int id) {
+void Executor::init_enclave_ssl(const std::string& hostname,
+                                const std::string& request, int id) {
   int status;
-  e_new_ssl(global_eid, &status, id, request.data(), (int)request.size());
+  e_new_ssl(global_eid, &status, id, hostname.data(), hostname.size(),
+            request.data(), request.size());
   ASSERT(status == StatusCode::Success);
 }
 
-Executor::Executor(io_context& ctx, int id, std::string address,
+Executor::Executor(io_context& ctx, int id, const std::string &hostname,
                    const std::string& request)
-    : address(std::move(address)),
+    : hostname(hostname),
       id(id),
       resolver(ctx),
       ctx(ctx),
       socket(ctx) {
-  init_enclave_ssl(request, id);
+  init_enclave_ssl(hostname, request, id);
   // 设置 non_blocking 需要在 socket 连接后进行，因此在回调中进行
   // socket.non_blocking(true);
 }
@@ -44,7 +46,7 @@ bool Executor::work() {
       case Resolve: {
         // 解析域名
         blocking = true;
-        resolver.async_resolve(address, "https",
+        resolver.async_resolve(hostname, "https",
                                [&](auto& error, auto results) {
                                  blocking = false;
                                  if (error) {
@@ -117,8 +119,8 @@ bool Executor::work() {
         // 获得 quote
         auto quote = (sgx_quote_t*)malloc(quote_size);
         sgx_get_quote(&enclave_result.report, SGX_LINKABLE_SIGNATURE,
-                      (const sgx_spid_t*)spid, nullptr, nullptr, 0, nullptr, quote,
-                      quote_size);
+                      (const sgx_spid_t*)spid, nullptr, nullptr, 0, nullptr,
+                      quote, quote_size);
         // Base64 编码
         auto b64_quote = base64_encode((unsigned char*)quote, quote_size);
         free(quote);

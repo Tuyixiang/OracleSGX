@@ -116,15 +116,11 @@ std::string Client::wrap() const {
   return str;
 }
 
-Client::Client(const std::string &request, int id)
-    : id(id), ssl(wolfSSL_new(global_ctx)), request(request) {
-  wolfSSL_set_fd(ssl, id);
-  init_parser();
-}
-
-Client::Client(std::string &&request, int id)
+Client::Client(const std::string &hostname, std::string &&request, int id)
     : id(id), ssl(wolfSSL_new(global_ctx)), request(std::move(request)) {
   wolfSSL_set_fd(ssl, id);
+  LOG("check hostname: '%s'", hostname.c_str());
+  wolfSSL_check_domain_name(ssl, hostname.c_str());
   init_parser();
 }
 

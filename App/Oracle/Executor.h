@@ -30,8 +30,8 @@ class Executor {
   } state = Resolve;
   // 如果异步操作出现错误，回调中设置 code，work() 时返回
   StatusCode error_code;
-  // 所连接的网址
-  const std::string address;
+  // 主机地址
+  const std::string hostname;
   // 在 map<int, Executor> 中的 key，也是 Enclave 的 o_recv 和 o_send 查找的标识
   const int id;
   // 解析得到的一系列 IP 地址
@@ -41,7 +41,8 @@ class Executor {
   SSLClient* ssl_client = nullptr;
 
   // 在 Enclave 中创建对应的对象
-  static void init_enclave_ssl(const std::string& request, int id);
+  static void init_enclave_ssl(const std::string& hostname,
+                               const std::string& request, int id);
 
  public:
   // 需要使用这个 context 来进行许多操作
@@ -54,7 +55,7 @@ class Executor {
   // Enclave 返回结果
   static EnclaveResult enclave_result;
 
-  Executor(io_context& ctx, int id, std::string address,
+  Executor(io_context& ctx, int id, const std::string& hostname,
            const std::string& request);
 
   // 异步回调发现错误，调用此函数置错误标记，下次 work 时返回错误
