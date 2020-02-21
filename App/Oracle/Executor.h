@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <boost/asio.hpp>
+#include <boost/enable_shared_from_this.hpp>
 #include <boost/shared_ptr.hpp>
 #include <chrono>
 #include <string>
@@ -17,7 +18,7 @@ using namespace std::chrono;
 
 class SSLClient;
 
-class Executor {
+class Executor : public boost::enable_shared_from_this<Executor> {
  protected:
   enum State {
     // 解析域名
@@ -35,8 +36,6 @@ class Executor {
   StatusCode error_code;
   // 主机地址
   const std::string hostname;
-  // 在 map<int, Executor> 中的 key，也是 Enclave 的 o_recv 和 o_send 查找的标识
-  const int id;
   // 解析得到的一系列 IP 地址
   ip::tcp::resolver resolver;
   ip::tcp::resolver::results_type endpoints;
@@ -49,7 +48,23 @@ class Executor {
   static void init_enclave_ssl(const std::string& hostname,
                                const std::string& request, int id);
 
+  // 解析域名之后的回调
+  static void resolve_callback(boost::shared_ptr<Executor> p_executor,
+                               const boost::system::error_code& ec,
+                               ip::tcp::resolver::results_type endpoints);
+
+  // SSL 连接（握手）之后的回调
+  static void connect_callback(boost::shared_ptr<Executor> p_executor,
+                               const boost::system::error_code& ec,
+                               const ip::tcp::endpoint& endpoint);
+
+  // 使用 SSLClient 进行 IAS 确认之后的回调
+  static void ias_callback(boost::shared_ptr<Executor> p_executor,
+                           const std::string& response);
+
  public:
+  // 在 map<int, Executor> 中的 key，也是 Enclave 的 o_recv 和 o_send 查找的标识
+  const int id;
   // 需要使用这个 context 来进行许多操作
   io_context& ctx;
   // o_recv 和 o_send 需要通过 Executor 来找到对应的 socket

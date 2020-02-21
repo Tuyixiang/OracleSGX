@@ -38,8 +38,8 @@ int Oracle::get_random_id() {
 }
 
 // 从 map 中和 Enclave 中移除一个任务
-std::map<int, Executor>::iterator Oracle::remove_job(
-    const std::map<int, Executor>::iterator &it) {
+std::map<int, boost::shared_ptr<Executor>>::iterator Oracle::remove_job(
+    const std::map<int, boost::shared_ptr<Executor>>::iterator &it) {
   if (it == executors.cend()) {
     return it;
   }
@@ -52,18 +52,18 @@ std::map<int, Executor>::iterator Oracle::remove_job(
 // 创建一个新的任务
 void Oracle::new_job(const std::string &address, const std::string &request) {
   auto id = get_random_id();
-  executors.emplace(std::piecewise_construct, std::make_tuple(id),
-                    std::tie(ctx, id, address, request));
+  executors.emplace(
+      id, boost::shared_ptr<Executor>(new Executor(ctx, id, address, request)));
 }
 
 // 遍历并执行所有任务
 void Oracle::work() {
   for (auto it = executors.begin(); it != executors.cend();) {
     try {
-      if (it->second.work()) {
+      if (it->second->work()) {
         // 该任务完成，将其释放
-        LOG(GREEN "Executor completed, freeing executor %d" RESET, it->first);
-        it->second.close();
+        LOG(GREEN "Executor %d completed, freeing" RESET, it->first);
+        it->second->close();
         ctx.poll();
         ctx.restart();
         it = remove_job(it);
@@ -75,7 +75,7 @@ void Oracle::work() {
       // 出现错误，将其终止
       ERROR("Executor %d terminated with message: %s", it->first,
             status.message());
-      it->second.close();
+      it->second->close();
       ctx.poll();
       ctx.restart();
       it = remove_job(it);
@@ -88,9 +88,9 @@ void Oracle::test_run(const std::string &address, const std::string &request) {
     new_job(address, request);
   }
   while (!executors.empty()) {
-    if (executors.size() < 256) {
-      new_job(address, request);
-    }
+    // if (executors.size() < 256) {
+    //   new_job(address, request);
+    // }
     work();
     ctx.poll();
     ctx.restart();

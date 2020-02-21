@@ -4,9 +4,9 @@
 #include <string>
 #include "Shared/Logging.h"
 
-#define RED "\033[37;41m"
-#define GREEN "\033[37;42m"
-#define YELLOW "\033[37;43m"
+#define RED "\033[31m"
+#define GREEN "\033[32m"
+#define YELLOW "\033[33m"
 #define RESET "\033[0m"
 
 struct StatusCode {
@@ -29,20 +29,19 @@ struct StatusCode {
       case Blocking:
         return "IO operation blocking.";
       case Uninitialized:
-        return RED "Something uninitialized." RESET;
+        return "Something uninitialized.";
       case NoAvailableWorker:
-        return RED
-            "All workers occupied. Cannot create new SSL connection." RESET;
+        return "All workers occupied. Cannot create new SSL connection.";
       case ResponseTooLarge:
-        return RED "Requested page exceeds size limit." RESET;
+        return "Requested page exceeds size limit.";
       case ParserError:
-        return RED "Failed to parse HTTP response." RESET;
+        return "Failed to parse HTTP response.";
       case LibraryError:
-        return RED "3rd-party library error." RESET;
+        return "3rd-party library error.";
       case Timeout:
-        return RED "Timeout." RESET;
+        return "Timeout.";
       case Unknown:
-        return RED "WTF?" RESET;
+        return "WTF?";
       default: { UNREACHABLE(); }
     }
   }

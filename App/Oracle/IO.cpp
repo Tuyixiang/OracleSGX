@@ -1,6 +1,22 @@
 // send 和 recv 的 ocall
 #include "Oracle.h"
 
+void wait(boost::shared_ptr<Executor> p_executor,
+          const boost::system::error_code &ec) {
+  INFO("blocking released");
+  if (ec == error::operation_aborted) {
+    // 如果是 socket 被关闭，则不需要管，正常回收释放
+    return;
+  }
+  auto &executor = *p_executor;
+  executor.blocking = false;
+  if (ec) {
+    ERROR("Executor %d async_wait failed: %s", executor.id,
+          ec.message().c_str());
+    executor.async_error();
+  }
+}
+
 // 需要符合 Linux socket IO 的接口，按照标准设置 errno
 int o_recv(int socket_id, char **p_buffer, int size, int *p_errno) {
   static char buffer[SOCKET_READ_SIZE];
@@ -11,7 +27,7 @@ int o_recv(int socket_id, char **p_buffer, int size, int *p_errno) {
     *p_errno = ENOTSOCK;
     return -1;
   }
-  auto &executor = iter->second;
+  auto &executor = *iter->second;
   auto &socket = executor.socket;
   // 调用非阻塞 IO
   boost::system::error_code error;
@@ -29,18 +45,8 @@ int o_recv(int socket_id, char **p_buffer, int size, int *p_errno) {
     INFO("o_recv() blocking");
     *p_errno = EWOULDBLOCK;
     executor.blocking = true;
-    socket.async_wait(ip::tcp::socket::wait_read, [&](auto &error) {
-      INFO("o_recv() block release");
-      if (error == error::operation_aborted) {
-        // 已经取消，此时 Executor 可能已经被释放
-        return;
-      }
-      executor.blocking = false;
-      if (error) {
-        ERROR("async_wait on receive failed: %s", error.message().c_str());
-        executor.async_error();
-      }
-    });
+    socket.async_wait(ip::tcp::socket::wait_read,
+                      boost::bind(wait, executor.shared_from_this(), _1));
     return -1;
   } else {
     // 出现错误
@@ -59,7 +65,7 @@ int o_send(int socket_id, const char *buffer, int size, int *p_errno) {
     *p_errno = ENOTSOCK;
     return -1;
   }
-  auto &executor = iter->second;
+  auto &executor = *iter->second;
   auto &socket = executor.socket;
   boost::system::error_code error;
   // 调用非阻塞 IO
@@ -75,18 +81,8 @@ int o_send(int socket_id, const char *buffer, int size, int *p_errno) {
     INFO("o_send() blocking");
     *p_errno = EWOULDBLOCK;
     executor.blocking = true;
-    socket.async_wait(ip::tcp::socket::wait_write, [&](auto &error) {
-      INFO("o_send() block release");
-      if (error == error::operation_aborted) {
-        // 已经取消，此时 Executor 可能已经被释放
-        return;
-      }
-      executor.blocking = false;
-      if (error) {
-        ERROR("async_wait on send failed: %s", error.message().c_str());
-        executor.async_error();
-      }
-    });
+    socket.async_wait(ip::tcp::socket::wait_write,
+                      boost::bind(wait, executor.shared_from_this(), _1));
     return -1;
   } else {
     // 出现错误

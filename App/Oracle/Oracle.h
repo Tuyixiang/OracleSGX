@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
+#include <boost/shared_ptr.hpp>
 #include <iostream>
 #include <random>
 #include "App/App.h"
@@ -27,11 +28,12 @@ class Oracle {
 
   // 从 map 中和 Enclave 中移除一个任务
   void remove_job(int id) { remove_job(executors.find(id)); }
-  std::map<int, Executor>::iterator remove_job(const std::map<int, Executor>::iterator &it);
+  std::map<int, boost::shared_ptr<Executor>>::iterator remove_job(
+      const std::map<int, boost::shared_ptr<Executor>>::iterator &it);
 
  public:
   io_context ctx;
-  std::map<int, Executor> executors;
+  std::map<int, boost::shared_ptr<Executor>> executors;
 
   // 获取全局的对象
   static Oracle &global() {

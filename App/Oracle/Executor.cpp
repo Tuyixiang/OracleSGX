@@ -1,4 +1,5 @@
 #include "Executor.h"
+#include <boost/bind.hpp>
 #include <iostream>
 #include "App/deps/base64.h"
 #include "SSLClient_port.h"
@@ -18,17 +19,73 @@ void Executor::init_enclave_ssl(const std::string& hostname,
   ASSERT(status == StatusCode::Success);
 }
 
+// 解析域名之后的回调
+void Executor::resolve_callback(boost::shared_ptr<Executor> p_executor,
+                                const boost::system::error_code& ec,
+                                ip::tcp::resolver::results_type endpoints) {
+  auto& executor = *p_executor;
+  executor.blocking = false;
+  if (ec) {
+    // 解析错误
+    LOG("Executor %d failed to resolve: %s", executor.id, ec.message().c_str());
+    executor.async_error();
+  } else {
+    // 解析完成后，进行连接
+    LOG("Executor %d resolved", executor.id);
+    executor.state = Connect;
+    executor.endpoints = std::move(endpoints);
+    // 执行下一步
+    executor.work();
+  }
+}
+
+// SSL 连接（握手）之后的回调
+void Executor::connect_callback(boost::shared_ptr<Executor> p_executor,
+                                const boost::system::error_code& ec,
+                                const ip::tcp::endpoint& endpoint) {
+  auto& executor = *p_executor;
+  executor.blocking = false;
+  LOG("Executor %d connected to endpoint %s", executor.id,
+      endpoint.address().to_string().c_str());
+  if (ec) {
+    // 连接失败
+    LOG("Executor %d failed to connect: %s", executor.id, ec.message().c_str());
+    executor.async_error();
+  } else {
+    // 连接成功
+    LOG("Executor %d connected", executor.id);
+    executor.state = Process;
+    // 设置非阻塞
+    executor.socket.non_blocking(true);
+    // 执行下一步
+    executor.work();
+  }
+}
+
+// 使用 SSLClient 进行 IAS 确认之后的回调
+void Executor::ias_callback(boost::shared_ptr<Executor> p_executor,
+                            const std::string& response) {
+  auto& executor = *p_executor;
+  executor.blocking = false;
+  if (response.empty()) {
+    // 出现错误
+    executor.async_error();
+    return;
+  }
+  LOG("IAS done %d", executor.id);
+  executor.state = Finished;
+  executor.error_code = StatusCode::Success;
+}
+
 Executor::Executor(io_context& ctx, int id, const std::string& hostname,
                    const std::string& request)
     : hostname(hostname),
-      id(id),
       resolver(ctx),
       start_time(steady_clock::now()),
+      id(id),
       ctx(ctx),
       socket(ctx) {
   init_enclave_ssl(hostname, request, id);
-  // 设置 non_blocking 需要在 socket 连接后进行，因此在回调中进行
-  // socket.non_blocking(true);
 }
 
 void Executor::async_error() {
@@ -51,48 +108,18 @@ bool Executor::work() {
       case Resolve: {
         // 解析域名
         blocking = true;
-        resolver.async_resolve(hostname, "https",
-                               [&](auto& error, auto results) {
-                                 blocking = false;
-                                 if (error) {
-                                   // 解析错误
-                                   LOG("Executor %d failed to resolve: %s", id,
-                                       error.message().c_str());
-                                   async_error();
-                                 } else {
-                                   // 解析完成后，进行连接
-                                   LOG("Executor %d resolved", id);
-                                   state = Connect;
-                                   endpoints = results;
-                                   // 执行下一步
-                                   work();
-                                 }
-                               });
+        resolver.async_resolve(
+            hostname, "https",
+            boost::bind(resolve_callback, shared_from_this(),
+                        placeholders::error, placeholders::results));
         return false;
       }
       case Connect: {
         // 进行连接（尝试所有 endpoints）
         blocking = true;
         async_connect(socket, endpoints,
-                      [&](auto& error, const ip::tcp::endpoint& endpoint) {
-                        blocking = false;
-                        LOG("Executor %d connected to endpoint %s", id,
-                            endpoint.address().to_string().c_str());
-                        if (error) {
-                          // 连接失败
-                          LOG("Executor %d failed to connect: %s", id,
-                              error.message().c_str());
-                          async_error();
-                        } else {
-                          // 连接成功
-                          LOG("Executor %d connected", id);
-                          state = Process;
-                          // 设置非阻塞
-                          socket.non_blocking(true);
-                          // 执行下一步
-                          work();
-                        }
-                      });
+                      boost::bind(connect_callback, shared_from_this(),
+                                  placeholders::error, placeholders::endpoint));
         return false;
       }
       case Process: {
@@ -146,20 +173,9 @@ bool Executor::work() {
             "\r\n\r\n"s;
         // 连接 IAS 服务
         blocking = true;
-        ssl_client = create_SSLClient(id, hostname, request, ctx,
-                                      [&](const std::string& response_body) {
-                                        blocking = false;
-                                        if (response_body.empty()) {
-                                          // 出现错误
-                                          async_error();
-                                          return;
-                                        }
-                                        LOG("IAS done %d", id);
-                                        // LOG("Response: %s",
-                                        // response_body.c_str());
-                                        state = Finished;
-                                        error_code = StatusCode::Success;
-                                      });
+        ssl_client =
+            create_SSLClient(id, hostname, request, ctx,
+                             boost::bind(ias_callback, shared_from_this(), _1));
         return false;
       }
       case Finished: {

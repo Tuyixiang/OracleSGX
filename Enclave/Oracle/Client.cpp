@@ -177,7 +177,7 @@ StatusCode Client::work() {
         switch (read()) {
           case StatusCode::Success: {
             // 响应接收完成
-            LOG(GREEN "Response received" RESET);
+            LOG("Response received");
             state = Quoting;
             continue;
           }
