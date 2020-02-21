@@ -1,11 +1,11 @@
 // 向目标地址请求网页
 #include "Client.h"
-#include "WolfSSL.h"
 #include <wolfssl/wolfcrypt/sha512.h>
 #include <wolfssl/wolfio.h>
 #include <map>
 #include "Enclave/Enclave_t.h"
 #include "Enclave/deps/cJSON.h"
+#include "WolfSSL.h"
 #include "sgx_trts.h"
 #include "sgx_uae_service.h"
 
@@ -22,7 +22,8 @@ StatusCode Client::parse_wolfssl_status(int ret) const {
       case SSL_ERROR_WANT_WRITE:
         return StatusCode::Blocking;
       default:
-        print_wolfssl_error(err);
+        ERROR("Client %d failed with message: %s", id,
+              get_wolfssl_error_str(err));
         return StatusCode::LibraryError;
     }
   }
@@ -88,10 +89,10 @@ StatusCode Client::read() {
 }
 
 // 根据错误代码，打印 WolfSSL 的错误信息
-void Client::print_wolfssl_error(int err) const {
+const char *Client::get_wolfssl_error_str(int err) const {
   static char buffer[89] = "WOLFSSL: ";
   wolfSSL_ERR_error_string((unsigned long)err, buffer + 9);
-  ERROR(buffer);
+  return buffer;
 }
 
 // 初始化 http_parser，在消息结束时置 response_complete = true
@@ -204,7 +205,8 @@ StatusCode Client::work() {
         unsigned char sha_sum[64];
         static_assert(sizeof(sgx_report_data_t) == 64);
         wc_InitSha512(&sha512);
-        wc_Sha512Update(&sha512, (const unsigned char *)response.data(), (unsigned)response.size());
+        wc_Sha512Update(&sha512, (const unsigned char *)response.data(),
+                        (unsigned)response.size());
         wc_Sha512Final(&sha512, sha_sum);
         // 生成 report
         LOG("Creating Report");

@@ -4,7 +4,7 @@
 #include <string>
 #include <tuple>
 #ifdef SGX_IN_ENCLAVE
-#include "Enclave/Enclave.h" // printf
+#include "Enclave/Enclave.h"  // printf
 #endif
 #include "deps/sha256.h"
 inline std::string operator""s(const char *str, std::size_t) { return str; }

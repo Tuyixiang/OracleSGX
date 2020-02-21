@@ -22,6 +22,7 @@ int o_recv(int socket_id, char **p_buffer, int size, int *p_errno) {
     INFO("o_recv() get %lu bytes (%s, %d)", recv_size,
          abstract({buffer, recv_size}).c_str(), size);
     *p_buffer = buffer;
+    ASSERT(recv_size <= sizeof(buffer));
     return (int)recv_size;
   } else if (error == error::would_block) {
     // 数据等待中
@@ -65,6 +66,7 @@ int o_send(int socket_id, const char *buffer, int size, int *p_errno) {
   auto send_size = socket.send(const_buffer(buffer, size), 0, error);
   if (!error) {
     // 发送成功
+    ASSERT(send_size > 0 and (int) send_size <= size);
     INFO("o_send() send %lu bytes (%s, %d)", send_size,
          abstract({buffer, send_size}).c_str(), size);
     return (int)send_size;

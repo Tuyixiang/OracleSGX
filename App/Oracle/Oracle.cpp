@@ -62,7 +62,7 @@ void Oracle::work() {
     try {
       if (it->second.work()) {
         // 该任务完成，将其释放
-        LOG("Executor completed, freeing executor %d", it->first);
+        LOG(GREEN "Executor completed, freeing executor %d" RESET, it->first);
         it->second.close();
         ctx.poll();
         ctx.restart();

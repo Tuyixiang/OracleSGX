@@ -3,10 +3,13 @@
 #define _A_SSLCLIENT_H_
 
 #include <boost/asio.hpp>
+#include <boost/asio/spawn.hpp>
 #include <boost/asio/ssl.hpp>
+#include <boost/enable_shared_from_this.hpp>
+
 using namespace boost::asio;
 
-class SSLClient {
+class SSLClient : public boost::enable_shared_from_this<SSLClient> {
  public:
   typedef std::function<void(const std::string&)> Callback;
 
@@ -18,7 +21,8 @@ class SSLClient {
   std::string hostname;
   std::string request;
   Callback callback;
-  bool* destroy_flag = nullptr;
+
+  static void async_process(boost::shared_ptr<SSLClient> p_client, yield_context yield);
 
  public:
   SSLClient(int id, const std::string& hostname, const std::string& request,

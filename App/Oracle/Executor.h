@@ -3,8 +3,9 @@
 
 #include <atomic>
 #include <boost/asio.hpp>
-#include <string>
+#include <boost/shared_ptr.hpp>
 #include <chrono>
+#include <string>
 #include "App/App.h"
 #include "App/Enclave_u.h"
 #include "Shared/Config.h"
@@ -40,7 +41,7 @@ class Executor {
   ip::tcp::resolver resolver;
   ip::tcp::resolver::results_type endpoints;
   // 访问 IAS 所用
-  SSLClient* ssl_client = nullptr;
+  boost::shared_ptr<SSLClient> ssl_client;
   // 开始时间
   const time_point<steady_clock> start_time;
 

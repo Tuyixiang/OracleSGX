@@ -54,7 +54,7 @@ class Client {
   StatusCode read();
 
   // 根据错误代码，打印 WolfSSL 的错误信息
-  void print_wolfssl_error(int err) const;
+  const char *get_wolfssl_error_str(int err) const;
 
   // 初始化 http_parser，在消息结束时置 response_complete = true
   void init_parser();

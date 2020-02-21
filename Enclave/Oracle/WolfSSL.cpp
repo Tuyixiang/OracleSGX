@@ -91,6 +91,12 @@ int e_work(int id, void *p_result) {
       // 执行完成
       // 写入回复
       auto &response = worker.get_response();
+      if (response.size() >= sizeof(result.data)) {
+        // 结果过长，报错
+        ERROR("Client %d failed: response too long, freeing", id);
+        workers.erase(iter);
+        return StatusCode::ResponseTooLarge;
+      }
       memcpy(result.data, response.data(), response.size());
       result.data_size = (int)response.size();
       // 写入 report
@@ -108,7 +114,7 @@ int e_work(int id, void *p_result) {
       // 出现错误
       ASSERT(status.is_error());
       // 释放空间
-      LOG("Client %d failed with error '%s', freeing", id, status.message());
+      ERROR("Client %d failed with error '%s', freeing", id, status.message());
       workers.erase(iter);
       return status;
     }

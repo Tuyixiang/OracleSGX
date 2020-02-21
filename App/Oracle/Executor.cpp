@@ -73,23 +73,26 @@ bool Executor::work() {
       case Connect: {
         // 进行连接（尝试所有 endpoints）
         blocking = true;
-        async_connect(socket, endpoints, [&](auto& error, auto) {
-          blocking = false;
-          if (error) {
-            // 连接失败
-            LOG("Executor %d failed to connect: %s", id,
-                error.message().c_str());
-            async_error();
-          } else {
-            // 连接成功
-            LOG("Executor %d connected", id);
-            state = Process;
-            // 设置非阻塞
-            socket.non_blocking(true);
-            // 执行下一步
-            work();
-          }
-        });
+        async_connect(socket, endpoints,
+                      [&](auto& error, const ip::tcp::endpoint& endpoint) {
+                        blocking = false;
+                        LOG("Executor %d connected to endpoint %s", id,
+                            endpoint.address().to_string().c_str());
+                        if (error) {
+                          // 连接失败
+                          LOG("Executor %d failed to connect: %s", id,
+                              error.message().c_str());
+                          async_error();
+                        } else {
+                          // 连接成功
+                          LOG("Executor %d connected", id);
+                          state = Process;
+                          // 设置非阻塞
+                          socket.non_blocking(true);
+                          // 执行下一步
+                          work();
+                        }
+                      });
         return false;
       }
       case Process: {
@@ -172,10 +175,7 @@ bool Executor::work() {
   UNREACHABLE();
 }
 
-Executor::~Executor() {
-  LOG("Removing executor %d", id);
-  free_SSLClient(ssl_client);
-}
+Executor::~Executor() { LOG("Removing executor %d", id); }
 
 void Executor::close() {
   socket.close();

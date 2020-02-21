@@ -4,9 +4,9 @@
 #include <string>
 #include "Shared/Logging.h"
 
-#define RED "\033[37,41m"
-#define GREEN "\033[37,42m"
-#define YELLOW "\033[37,43m"
+#define RED "\033[37;41m"
+#define GREEN "\033[37;42m"
+#define YELLOW "\033[37;43m"
 #define RESET "\033[0m"
 
 struct StatusCode {

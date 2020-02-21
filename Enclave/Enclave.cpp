@@ -73,6 +73,7 @@ extern "C" size_t recv(int socket, void *buff, size_t size, int flags) {
     o_recv(&recv_ret, socket, &buffer_in, SOCKET_READ_SIZE, &errno);
     if (recv_ret > 0) {
       // 成功收到数据
+      ASSERT(recv_ret <= SOCKET_READ_SIZE);
       if (recv_ret > (int)size) {
         // 收到的大小大于请求的大小
         // 将多余部分存下来
@@ -89,7 +90,7 @@ extern "C" size_t recv(int socket, void *buff, size_t size, int flags) {
         // ocall 收到的大小小于等于请求的大小
         // 返回目前收到的数据，等待再次调用
         INFO("recv() get %d bytes (%s, %d)", recv_ret,
-             abstract({buffer_in, size}).c_str(), recv_ret);
+             abstract({buffer_in, recv_ret}).c_str(), recv_ret);
         memcpy(buff, buffer_in, (size_t)recv_ret);
         return (size_t)recv_ret;
       }
