@@ -5,7 +5,9 @@
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
 #include <boost/shared_ptr.hpp>
+#include <boost/thread/mutex.hpp>
 #include <iostream>
+#include <list>
 #include <random>
 #include "App/App.h"
 #include "App/Enclave_u.h"
@@ -31,6 +33,9 @@ class Oracle {
   std::map<int, boost::shared_ptr<Executor>>::iterator remove_job(
       const std::map<int, boost::shared_ptr<Executor>>::iterator &it);
 
+  std::list<boost::shared_ptr<Executor>> pending;
+  boost::mutex mutex;
+
  public:
   io_context ctx;
   std::map<int, boost::shared_ptr<Executor>> executors;
@@ -46,6 +51,9 @@ class Oracle {
 
   // 遍历并执行所有任务
   void work();
+
+  // 某个异步 IO 操作完成，需要执行 Executor::work
+  void need_work(boost::shared_ptr<Executor> p_executor);
 
   void test_run(const std::string &address, const std::string &request);
 };

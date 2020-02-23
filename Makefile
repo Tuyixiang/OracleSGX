@@ -128,7 +128,7 @@ endif
 
 App_Cpp_Flags := $(App_C_Flags)
 App_Link_Flags := -L$(SGX_LIBRARY_PATH) $(App_Link_Libraries) -lpthread\
-	$(WolfSSL_Link_Flags) $(OpenSSL_Link_Flags) -L/usr/local/lib -lboost_coroutine
+	$(WolfSSL_Link_Flags) $(OpenSSL_Link_Flags) -L/usr/local/lib -lboost_coroutine -lboost_thread
 
 App_Objects := $(App_C_Files:.c=.o) $(App_Cpp_Files:.cpp=.o)
 

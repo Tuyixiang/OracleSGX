@@ -9,12 +9,13 @@ void wait(boost::shared_ptr<Executor> p_executor,
     return;
   }
   auto &executor = *p_executor;
-  executor.blocking = false;
   if (ec) {
     ERROR("Executor %d async_wait failed: %s", executor.id,
           ec.message().c_str());
     executor.async_error();
   }
+  executor.blocking = false;
+  Oracle::global().need_work(std::move(p_executor));
 }
 
 // 需要符合 Linux socket IO 的接口，按照标准设置 errno

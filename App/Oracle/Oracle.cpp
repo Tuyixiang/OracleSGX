@@ -1,4 +1,5 @@
 #include "Oracle.h"
+#include <boost/thread.hpp>
 #include <chrono>
 #include "App/Enclave_u.h"
 #include "Shared/Config.h"
@@ -52,47 +53,65 @@ std::map<int, boost::shared_ptr<Executor>>::iterator Oracle::remove_job(
 // 创建一个新的任务
 void Oracle::new_job(const std::string &address, const std::string &request) {
   auto id = get_random_id();
-  executors.emplace(
-      id, boost::shared_ptr<Executor>(new Executor(ctx, id, address, request)));
+  auto shared_p =
+      boost::shared_ptr<Executor>(new Executor(ctx, id, address, request));
+  executors.emplace(id, shared_p);
+  pending.push_back(std::move(shared_p));
+}
+
+// 某个异步 IO 操作完成，需要执行 Executor::work
+void Oracle::need_work(boost::shared_ptr<Executor> p_executor) {
+  boost::lock_guard lock(mutex);
+  pending.push_back(std::move(p_executor));
 }
 
 // 遍历并执行所有任务
 void Oracle::work() {
-  for (auto it = executors.begin(); it != executors.cend();) {
+  // 取出所有等待进行的 work 任务
+  decltype(pending) recorded_pending;
+  {
+    boost::lock_guard lock(mutex);
+    pending.swap(recorded_pending);
+  }
+  // 处理这些任务
+  for (auto it = recorded_pending.begin(); it != recorded_pending.cend();
+       it++) {
+    auto &executor = **it;
     try {
-      if (it->second->work()) {
+      if (executor.work()) {
         // 该任务完成，将其释放
-        LOG(GREEN "Executor %d completed, freeing" RESET, it->first);
-        it->second->close();
-        ctx.poll();
-        ctx.restart();
-        it = remove_job(it);
+        LOG(GREEN "Executor %d completed, freeing" RESET, executors.size(), executor.id);
+        remove_job(executor.id);
       } else {
-        // 继续执行后续任务
-        ++it;
+        if (!executor.blocking) {
+          need_work(*it);
+        }
       }
     } catch (const StatusCode &status) {
       // 出现错误，将其终止
-      ERROR("Executor %d terminated with message: %s", it->first,
+      ERROR("Executor %d terminated with message: %s", executor.id,
             status.message());
-      it->second->close();
-      ctx.poll();
-      ctx.restart();
-      it = remove_job(it);
+      remove_job(executor.id);
     }
   }
 }
 
 void Oracle::test_run(const std::string &address, const std::string &request) {
-  for (int i = 0; i < 256; i += 1) {
-    new_job(address, request);
-  }
-  while (!executors.empty()) {
-    // if (executors.size() < 256) {
-    //   new_job(address, request);
-    // }
+  // 建立多个线程执行不需要 Enclave 参与的步骤，即 io_context::run()
+  auto run = [&]() {
+    while (true) {
+      ctx.run();
+      ctx.restart();
+    }
+  };
+  boost::thread pool[] = {
+      boost::thread(run), boost::thread(run), boost::thread(run),
+      boost::thread(run), boost::thread(run),
+  };
+  while (true) {
+    if (executors.size() < 512) {
+      new_job(address, request);
+    }
     work();
-    ctx.poll();
-    ctx.restart();
   }
 }

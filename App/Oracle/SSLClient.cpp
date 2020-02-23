@@ -83,7 +83,6 @@ void SSLClient::run() {
   LOG("Running SSLClient %d", id);
   // 需要捕获 id 数值用于打印 debug 信息
   // 因为在取消错误回调时，this 可能已被销毁
-  auto capture_id = id;
   spawn(ctx, boost::bind(async_process, shared_from_this(), _1));
 }
 

@@ -5,6 +5,7 @@
 #include "SSLClient_port.h"
 #include "Shared/deps/http_parser.h"
 #include "sgx_uae_service.h"
+#include "Oracle.h"
 
 using namespace boost::asio;
 
@@ -24,7 +25,6 @@ void Executor::resolve_callback(boost::shared_ptr<Executor> p_executor,
                                 const boost::system::error_code& ec,
                                 ip::tcp::resolver::results_type endpoints) {
   auto& executor = *p_executor;
-  executor.blocking = false;
   if (ec) {
     // 解析错误
     LOG("Executor %d failed to resolve: %s", executor.id, ec.message().c_str());
@@ -34,9 +34,9 @@ void Executor::resolve_callback(boost::shared_ptr<Executor> p_executor,
     LOG("Executor %d resolved", executor.id);
     executor.state = Connect;
     executor.endpoints = std::move(endpoints);
-    // 执行下一步
-    executor.work();
   }
+  executor.blocking = false;
+  Oracle::global().need_work(std::move(p_executor));
 }
 
 // SSL 连接（握手）之后的回调
@@ -44,7 +44,6 @@ void Executor::connect_callback(boost::shared_ptr<Executor> p_executor,
                                 const boost::system::error_code& ec,
                                 const ip::tcp::endpoint& endpoint) {
   auto& executor = *p_executor;
-  executor.blocking = false;
   LOG("Executor %d connected to endpoint %s", executor.id,
       endpoint.address().to_string().c_str());
   if (ec) {
@@ -57,24 +56,26 @@ void Executor::connect_callback(boost::shared_ptr<Executor> p_executor,
     executor.state = Process;
     // 设置非阻塞
     executor.socket.non_blocking(true);
-    // 执行下一步
-    executor.work();
   }
+  executor.blocking = false;
+  Oracle::global().need_work(std::move(p_executor));
 }
 
 // 使用 SSLClient 进行 IAS 确认之后的回调
 void Executor::ias_callback(boost::shared_ptr<Executor> p_executor,
                             const std::string& response) {
   auto& executor = *p_executor;
-  executor.blocking = false;
   if (response.empty()) {
     // 出现错误
     executor.async_error();
     return;
+  } else {
+    LOG("IAS done %d", executor.id);
+    executor.state = Finished;
+    executor.error_code = StatusCode::Success;
   }
-  LOG("IAS done %d", executor.id);
-  executor.state = Finished;
-  executor.error_code = StatusCode::Success;
+  executor.blocking = false;
+  Oracle::global().need_work(std::move(p_executor));
 }
 
 Executor::Executor(io_context& ctx, int id, const std::string& hostname,
