@@ -58,11 +58,15 @@ class Executor : public boost::enable_shared_from_this<Executor> {
                                const boost::system::error_code& ec,
                                const ip::tcp::endpoint& endpoint);
 
+  // 启动 IAS 的请求
+  static void ias_request(boost::shared_ptr<Executor> p_executor,
+                          sgx_report_t report);
+
+ public:
   // 使用 SSLClient 进行 IAS 确认之后的回调
   static void ias_callback(boost::shared_ptr<Executor> p_executor,
                            const std::string& response);
 
- public:
   // 在 map<int, Executor> 中的 key，也是 Enclave 的 o_recv 和 o_send 查找的标识
   const int id;
   // 需要使用这个 context 来进行许多操作

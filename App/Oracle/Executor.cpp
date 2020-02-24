@@ -2,10 +2,11 @@
 #include <boost/bind.hpp>
 #include <iostream>
 #include "App/deps/base64.h"
-#include "SSLClient_port.h"
+#include "Executor_port.h"
+#include "Oracle.h"
 #include "Shared/deps/http_parser.h"
 #include "sgx_uae_service.h"
-#include "Oracle.h"
+#include "IAS_port.h"
 
 using namespace boost::asio;
 
@@ -37,6 +38,44 @@ void Executor::resolve_callback(boost::shared_ptr<Executor> p_executor,
   }
   executor.blocking = false;
   Oracle::global().need_work(std::move(p_executor));
+}
+
+// 启动 IAS 的请求
+void Executor::ias_request(boost::shared_ptr<Executor> p_executor,
+                           sgx_report_t report) {
+  static const char spid[] =
+      "\xDE\xD9\x6A\x2B\x18\x11\x28\xD8\x0F\x4F\x4F\xE9\x09\x1B\xCE"
+      "\xBF";
+  static_assert(sizeof(sgx_spid_t) < sizeof(spid));
+  // todo: 更新 sigRL
+  static const unsigned char* sigrl = nullptr;
+  static const unsigned sigrl_size = 0;
+  // 获取 quote 大小
+  unsigned quote_size;
+  sgx_calc_quote_size(sigrl, sigrl_size, &quote_size);
+  // 获得 quote
+  auto quote = (sgx_quote_t*)malloc(quote_size);
+  sgx_get_quote(&report, SGX_LINKABLE_SIGNATURE, (const sgx_spid_t*)spid,
+                nullptr, nullptr, 0, nullptr, quote, quote_size);
+  // Base64 编码
+  auto b64_quote = base64_encode((unsigned char*)quote, quote_size);
+  free(quote);
+  // 生成使用 IAS API 的请求
+  auto hostname = "api.trustedservices.intel.com"s;
+  auto request_body = "{\"isvEnclaveQuote\":\""s + b64_quote + "\"}"s;
+  auto request =
+      "POST /sgx/dev/attestation/v3/report HTTP/1.1\r\n"
+      "Content-Type: application/json\r\n"
+      "Host: api.trustedservices.intel.com\r\n"
+      "Ocp-Apim-Subscription-Key: 141e8ac09b50434ea6b35198cf635090\r\n"
+      "Content-Length: "s +
+      std::to_string(request_body.size()) + "\r\n\r\n"s + request_body +
+      "\r\n\r\n"s;
+  // 连接 IAS 服务
+  send_ias(p_executor, request);
+  // p_executor->ssl_client = create_SSLClient(
+  //     p_executor->id, hostname, request, p_executor->ctx,
+  //     boost::bind(ias_callback, p_executor->shared_from_this(), _1));
 }
 
 // SSL 连接（握手）之后的回调
@@ -76,6 +115,11 @@ void Executor::ias_callback(boost::shared_ptr<Executor> p_executor,
   }
   executor.blocking = false;
   Oracle::global().need_work(std::move(p_executor));
+}
+
+void executor_ias_callback(boost::shared_ptr<Executor> p_executor,
+                           const std::string& response) {
+  Executor::ias_callback(p_executor, response);
 }
 
 Executor::Executor(io_context& ctx, int id, const std::string& hostname,
@@ -144,39 +188,9 @@ bool Executor::work() {
         UNREACHABLE();
       }
       case Attest: {
-        static const char spid[] =
-            "\xDE\xD9\x6A\x2B\x18\x11\x28\xD8\x0F\x4F\x4F\xE9\x09\x1B\xCE\xBF";
-        static_assert(sizeof(sgx_spid_t) < sizeof(spid));
-        // todo: 更新 sigRL
-        static const unsigned char* sigrl = nullptr;
-        static const unsigned sigrl_size = 0;
-        // 获取 quote 大小
-        unsigned quote_size;
-        sgx_calc_quote_size(sigrl, sigrl_size, &quote_size);
-        // 获得 quote
-        auto quote = (sgx_quote_t*)malloc(quote_size);
-        sgx_get_quote(&enclave_result.report, SGX_LINKABLE_SIGNATURE,
-                      (const sgx_spid_t*)spid, nullptr, nullptr, 0, nullptr,
-                      quote, quote_size);
-        // Base64 编码
-        auto b64_quote = base64_encode((unsigned char*)quote, quote_size);
-        free(quote);
-        // 生成使用 IAS API 的请求
-        auto hostname = "api.trustedservices.intel.com"s;
-        auto request_body = "{\"isvEnclaveQuote\":\""s + b64_quote + "\"}"s;
-        auto request =
-            "POST /sgx/dev/attestation/v3/report HTTP/1.1\r\n"
-            "Content-Type: application/json\r\n"
-            "Host: api.trustedservices.intel.com\r\n"
-            "Ocp-Apim-Subscription-Key: 141e8ac09b50434ea6b35198cf635090\r\n"
-            "Content-Length: "s +
-            std::to_string(request_body.size()) + "\r\n\r\n"s + request_body +
-            "\r\n\r\n"s;
-        // 连接 IAS 服务
         blocking = true;
-        ssl_client =
-            create_SSLClient(id, hostname, request, ctx,
-                             boost::bind(ias_callback, shared_from_this(), _1));
+        dispatch(ctx, boost::bind(ias_request, shared_from_this(),
+                                  enclave_result.report));
         return false;
       }
       case Finished: {
@@ -196,5 +210,5 @@ Executor::~Executor() { LOG("Removing executor %d", id); }
 
 void Executor::close() {
   socket.close();
-  close_SSLClient(ssl_client);
+  // close_SSLClient(ssl_client);
 }

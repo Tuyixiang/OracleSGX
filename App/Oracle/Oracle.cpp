@@ -2,6 +2,7 @@
 #include <boost/thread.hpp>
 #include <chrono>
 #include "App/Enclave_u.h"
+#include "Oracle_port.h"
 #include "Shared/Config.h"
 #include "Shared/StatusCode.h"
 
@@ -19,6 +20,8 @@ const std::string request =
     // "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/"
     // "apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9\r\n"
     "Accept-Encoding: identity\r\n\r\n";
+
+int completed = 0;
 
 void test() { Oracle::global().test_run("www.baidu.com", request); }
 
@@ -80,7 +83,8 @@ void Oracle::work() {
     try {
       if (executor.work()) {
         // 该任务完成，将其释放
-        LOG(GREEN "Executor %d completed, freeing" RESET, executors.size(), executor.id);
+        LOG(GREEN "Executor %d completed, freeing" RESET, executor.id);
+        completed++;
         remove_job(executor.id);
       } else {
         if (!executor.blocking) {
@@ -104,14 +108,23 @@ void Oracle::test_run(const std::string &address, const std::string &request) {
       ctx.restart();
     }
   };
-  boost::thread pool[] = {
-      boost::thread(run), boost::thread(run), boost::thread(run),
-      boost::thread(run), boost::thread(run),
-  };
+  boost::thread bg0(run);
+  boost::thread bg1(run);
+  boost::thread bg2(run);
+  boost::thread check([&]() {
+    for (int i = 1;; i++) {
+      sleep(1);
+      dispatch(ctx, [i]() {
+        LOG("Speed: %d/%d = %f", completed, i, (float)completed / i);
+      });
+    }
+  });
   while (true) {
-    if (executors.size() < 512) {
+    if (executors.size() < 128) {
       new_job(address, request);
     }
     work();
   }
 }
+
+boost::asio::io_context &oracle_global_ctx() { return Oracle::global().ctx; }
